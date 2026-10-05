@@ -13,6 +13,7 @@ import type { Quest } from "../../../src/quests/quest-generator";
 import { type ClassCode, type OnboardingAnswers } from "../../../src/onboarding/calibration";
 import type { Goal } from "./setup";
 import { xpBonus } from "./skilltree";
+import { msg, type Msg } from "../i18n";
 
 export const SKILLS: readonly SkillCode[] = ["vitality", "craft", "wealth", "charisma", "mindset"];
 
@@ -100,38 +101,46 @@ export function previewAward(s: Session, q: Quest): AwardResult {
   return { ...r, totalXp: r.totalXp + extra, perSkill, multipliers: { ...r.multipliers, skillTree: 1 + extra / (r.totalXp || 1) } };
 }
 
-export type Gate = { ok: true } | { ok: false; reason: string };
+const PINNED_NAMES: Record<string, string> = { home: "Home", work: "Work", gym: "Gym" };
+/** A home/work/gym the player pinned (setup.ts names them by kind), as opposed to a named map waypoint. */
+export const isPinnedPlace = (w: Waypoint) => PINNED_NAMES[w.kind] === w.name;
+
+export type Gate = { ok: true } | { ok: false; reason: Msg };
 
 /** Whether the player can turn this quest in now: prerequisites, being at the waypoint, fog revealed. */
 export function questGate(s: Session, q: Quest): Gate {
   const blocker = q.prerequisites
     .map(id => s.quests.find(e => e.quest.local_id === id))
     .find(e => e && e.status !== "done");
-  if (blocker) return { ok: false, reason: `Finish "${blocker.quest.title}" first` };
+  if (blocker) return { ok: false, reason: msg("gate.finishFirst", { quest: blocker.quest.title }) };
 
   if (q.success.type === "geofence_dwell" && q.location.type === "waypoint") {
     const wp = s.waypoints.find(w => w.id === q.location.ref);
-    if (!wp) return { ok: false, reason: "Unknown waypoint" };
+    if (!wp) return { ok: false, reason: msg("gate.unknownPlace") };
     const d = greatCircleDistance([s.position.lat, s.position.lng], [wp.lat, wp.lng], "m");
-    if (d > wp.radiusM) return { ok: false, reason: `Go to ${wp.name} (${formatDistance(d)})` };
+    if (d > wp.radiusM) {
+      // A place the player pinned is named by its kind, in their language; other waypoints keep their own name.
+      const place = isPinnedPlace(wp) ? msg(`place.${wp.kind}` as "place.home") : wp.name;
+      return { ok: false, reason: msg("gate.goTo", { place, distance: formatDistance(d) }) };
+    }
   }
 
   if (q.kind === "exploration" && q.success.type === "count" && q.success.target) {
     const ref = q.location.type === "district" ? q.location.ref : null;
     const n = [...s.newCells].filter(c => !ref || districtOf(c) === ref).length;
-    if (n < q.success.target) return { ok: false, reason: `Reveal ${q.success.target - n} more cells` };
+    if (n < q.success.target) return { ok: false, reason: msg("gate.reveal", { n: q.success.target - n }) };
   }
   return { ok: true };
 }
 
 export type CompleteResult =
   | { ok: true; session: Session; award: AwardResult; levelUp: { from: number; to: number } | null }
-  | { ok: false; reason: string };
+  | { ok: false; reason: Msg };
 
 export function completeQuest(s: Session, localId: string): CompleteResult {
   const entry = s.quests.find(e => e.quest.local_id === localId);
-  if (!entry) return { ok: false, reason: "No such quest" };
-  if (entry.status === "done") return { ok: false, reason: "Already completed" };
+  if (!entry) return { ok: false, reason: msg("gate.noQuest") };
+  if (entry.status === "done") return { ok: false, reason: msg("gate.alreadyDone") };
   const gate = questGate(s, entry.quest);
   if (!gate.ok) return gate;
 
@@ -261,7 +270,7 @@ export function hud(s: Session): Hud {
     }),
     district: {
       id: district,
-      name: s.districtNames[district] ?? "Uncharted",
+      name: s.districtNames[district] ?? "Uncharted",   // a phrase: translated on screen
       pct,
       next: DISTRICT_MILESTONES.find(m => m.pct > pct) ?? null,
     },

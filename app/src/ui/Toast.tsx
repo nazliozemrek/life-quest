@@ -1,10 +1,14 @@
 import { useEffect, useRef } from "react";
 import { Animated, StyleSheet, Text } from "react-native";
 import type { GameEvent } from "./useGameSession";
+import { say } from "../i18n";
+import { questText } from "../i18n/quests";
+import { useT } from "./settings";
 import { color } from "./theme";
 
 /** Reward popup: "+172 XP" floats up and fades; a level up holds a little longer. */
 export function Toast({ event }: { event: (GameEvent & { id: number }) | null }) {
+  const t = useT();
   const anim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -27,14 +31,16 @@ export function Toast({ event }: { event: (GameEvent & { id: number }) | null })
       accessibilityLiveRegion="polite">
       {event.kind === "xp" ? (
         <>
-          {event.levelUp && <Text style={styles.level}>LEVEL {event.levelUp}</Text>}
+          {event.levelUp && <Text style={styles.level}>{t("toast.level", { n: event.levelUp })}</Text>}
           <Text style={styles.xp}>+{event.xp} XP</Text>
-          <Text style={styles.title} numberOfLines={1}>{event.title}</Text>
+          <Text style={styles.title} numberOfLines={1}>
+            {t.p(questText({ title: event.title, rationale: event.rationale ?? "", flavor_text: "", objective: "" }, t).title)}
+          </Text>
         </>
       ) : event.kind === "info" ? (
-        <Text style={styles.error}>{event.title}</Text>
+        <Text style={styles.error}>{say(t, event.title)}</Text>
       ) : (
-        <Text style={styles.error}>{event.message}</Text>
+        <Text style={styles.error}>{say(t, event.message)}</Text>
       )}
     </Animated.View>
   );

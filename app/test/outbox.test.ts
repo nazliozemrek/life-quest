@@ -26,7 +26,7 @@ function playedSession() {
   const s = startGame(createSession(NOW), "Kaan", answers, NOW).session;
   const q = s.quests.find(e => e.quest.location.type === "none")!.quest;
   const r = completeQuest(s, q.local_id);
-  if (!r.ok) throw new Error(r.reason);
+  if (!r.ok) throw new Error(r.reason.key);
   return { s: r.session, answers, award: r.award, q };
 }
 

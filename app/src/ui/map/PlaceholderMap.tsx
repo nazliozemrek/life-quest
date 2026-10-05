@@ -6,6 +6,7 @@ import { Pressable, StyleSheet, View, type LayoutChangeEvent } from "react-nativ
 import Svg, { Circle, G, Path, Polygon, Text as SvgText } from "react-native-svg";
 import { fogMask } from "../../../../src/spatial/spatial-engine";
 import { makeProjection, type Projection } from "../../game/projection";
+import { useT } from "../settings";
 import { color } from "../theme";
 import type { MapViewProps } from "./types";
 
@@ -14,6 +15,7 @@ const METERS_PER_PX = 4;
 const CAMERA_Y = 0.36;
 
 export function PlaceholderMap({ explored, position, waypoints, districts, focus, onPress }: MapViewProps) {
+  const t = useT();
   const [size, setSize] = useState({ w: 0, h: 0 });
   const root = useRef<View>(null);
   const origin = useRef({ x: 0, y: 0 });
@@ -53,7 +55,7 @@ export function PlaceholderMap({ explored, position, waypoints, districts, focus
           const { locationX, locationY, pageX, pageY } = e.nativeEvent;
           onPress(proj.toLatLng(locationX ?? pageX - origin.current.x, locationY ?? pageY - origin.current.y));
         }}
-        accessibilityLabel="Map. Tap a spot to walk there."
+        accessibilityLabel={t("map.a11y")}
       >
         {size.w > 0 && (
           <Svg width={size.w} height={size.h}>

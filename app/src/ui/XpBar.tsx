@@ -1,11 +1,13 @@
 import { useEffect, useRef } from "react";
 import { Animated, Easing, StyleSheet, Text, View } from "react-native";
+import { useT } from "./settings";
 import { color } from "./theme";
 
 interface Props { level: number; into: number; need: number; pct: number; restedPct: number }
 
 /** Player XP bar. Rested XP is drawn ahead of the fill; a level up fills to the end, then refills from zero. */
 export function XpBar({ level, into, need, pct, restedPct }: Props) {
+  const t = useT();
   const fill = useRef(new Animated.Value(pct)).current;
   const prevLevel = useRef(level);
 
@@ -30,7 +32,7 @@ export function XpBar({ level, into, need, pct, restedPct }: Props) {
       </View>
       <View style={styles.labels}>
         <Text style={styles.xp}>{into.toLocaleString("en-US")} / {need.toLocaleString("en-US")} XP</Text>
-        {restedPct > 0 && <Text style={styles.restedLabel}>Rested ×2</Text>}
+        {restedPct > 0 && <Text style={styles.restedLabel}>{t("hud.rested")}</Text>}
       </View>
     </View>
   );

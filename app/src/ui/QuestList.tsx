@@ -3,7 +3,10 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { Quest } from "../../../src/quests/quest-generator";
 import type { Gate, QuestEntry } from "../game/session";
-import { color, skillColor, skillLabel, tierLabel } from "./theme";
+import { questText } from "../i18n/quests";
+import { say } from "../i18n";
+import { useT } from "./settings";
+import { color, skillColor } from "./theme";
 
 export interface QuestRowModel { entry: QuestEntry; previewXp: number; gate: Gate; place: string | null }
 
@@ -17,6 +20,7 @@ interface Props {
 
 /** Bottom quest log. Open quests first (available before blocked), finished ones sink to the bottom. */
 export function QuestList({ rows, done, total, onComplete, onLocate }: Props) {
+  const t = useT();
   const [open, setOpen] = useState(true);
   const rank = (r: QuestRowModel) => (r.entry.status === "done" ? 2 : r.gate.ok ? 0 : 1);
   const sorted = [...rows].sort((a, b) => rank(a) - rank(b));
@@ -27,10 +31,10 @@ export function QuestList({ rows, done, total, onComplete, onLocate }: Props) {
   return (
     <View style={[styles.sheet, open ? styles.sheetOpen : styles.sheetClosed, !open && { paddingBottom: insets.bottom }]}>
       <Pressable onPress={() => setOpen(o => !o)} style={styles.header} accessibilityRole="button"
-        accessibilityLabel={open ? "Collapse quest log" : "Expand quest log"}>
+        accessibilityLabel={t(open ? "quests.collapse" : "quests.expand")}>
         <View style={styles.grabber} />
         <View style={styles.headerRow}>
-          <Text style={styles.heading}>Today's Quests</Text>
+          <Text style={styles.heading}>{t("quests.today")}</Text>
           <View style={styles.headerRight}>
             <Text style={styles.count}>{done}/{total}</Text>
             <Text style={styles.chevron}>{open ? "▾" : "▴"}</Text>
@@ -43,7 +47,7 @@ export function QuestList({ rows, done, total, onComplete, onLocate }: Props) {
             </View>
             {next && (
               <Text style={styles.next} numberOfLines={1}>
-                Next: <Text style={styles.nextTitle}>{next.entry.quest.title}</Text>  +{next.previewXp} XP
+                {t("quests.next")} <Text style={styles.nextTitle}>{questText(next.entry.quest, t).title}</Text>  +{next.previewXp} XP
               </Text>
             )}
           </>
@@ -61,7 +65,9 @@ export function QuestList({ rows, done, total, onComplete, onLocate }: Props) {
 }
 
 function QuestRow({ row, onComplete, onLocate }: { row: QuestRowModel } & Pick<Props, "onComplete" | "onLocate">) {
+  const t = useT();
   const { quest: q, status, awardedXp } = row.entry;
+  const text = questText(q, t);
   const done = status === "done";
   const lead = q.skill_weights.reduce((a, b) => (b.weight > a.weight ? b : a)).skill;
 
@@ -69,40 +75,40 @@ function QuestRow({ row, onComplete, onLocate }: { row: QuestRowModel } & Pick<P
     <Pressable
       onPress={() => q.location.type !== "none" && onLocate(q)}
       style={[styles.row, done && styles.rowDone]}
-      accessibilityHint={q.location.type !== "none" ? "Shows the quest location on the map" : undefined}
+      accessibilityHint={q.location.type !== "none" ? t("quests.locateHint") : undefined}
     >
       <View style={[styles.stripe, { backgroundColor: skillColor[lead] }]} />
       <View style={styles.body}>
-        <Text style={[styles.title, done && styles.titleDone]} numberOfLines={1}>{q.title}</Text>
-        <Text style={styles.objective} numberOfLines={2}>{q.objective}</Text>
+        <Text style={[styles.title, done && styles.titleDone]} numberOfLines={1}>{text.title}</Text>
+        <Text style={styles.objective} numberOfLines={2}>{text.objective}</Text>
         <View style={styles.meta}>
-          <Text style={styles.metaText}>{tierLabel[q.tier]}</Text>
+          <Text style={styles.metaText}>{t(`tier.${q.tier}`)}</Text>
           <Text style={styles.metaDot}>·</Text>
-          <Text style={styles.metaText}>{q.estimated_minutes} min</Text>
+          <Text style={styles.metaText}>{t("quests.minutes", { n: q.estimated_minutes })}</Text>
           {row.place && (<><Text style={styles.metaDot}>·</Text><Text style={styles.metaText}>{row.place}</Text></>)}
           {q.skill_weights.map(w => (
-            <Text key={w.skill} style={[styles.skillTag, { color: skillColor[w.skill] }]}>{skillLabel[w.skill]}</Text>
+            <Text key={w.skill} style={[styles.skillTag, { color: skillColor[w.skill] }]}>{t(`skillShort.${w.skill}`)}</Text>
           ))}
         </View>
-        {!done && !row.gate.ok && <Text style={styles.blocked}>{row.gate.reason}</Text>}
+        {!done && !row.gate.ok && <Text style={styles.blocked}>{say(t, row.gate.reason)}</Text>}
       </View>
 
       <View style={styles.side}>
         <Text style={[styles.xp, done && styles.xpDone]}>+{done ? awardedXp : row.previewXp}</Text>
         <Text style={styles.xpUnit}>XP</Text>
         {done ? (
-          <Text style={styles.check}>Done</Text>
+          <Text style={styles.check}>{t("quests.done")}</Text>
         ) : (
           <Pressable
             disabled={!row.gate.ok}
             onPress={() => onComplete(q.local_id, q.title)}
             style={({ pressed }) => [styles.button, !row.gate.ok && styles.buttonLocked, pressed && styles.buttonPressed]}
             accessibilityRole="button"
-            accessibilityLabel={`Complete ${q.title}`}
+            accessibilityLabel={t("quests.completeLabel", { title: text.title })}
             accessibilityState={{ disabled: !row.gate.ok }}
             hitSlop={8}
           >
-            <Text style={[styles.buttonText, !row.gate.ok && styles.buttonTextLocked]} numberOfLines={1}>Complete</Text>
+            <Text style={[styles.buttonText, !row.gate.ok && styles.buttonTextLocked]} numberOfLines={1}>{t("quests.complete")}</Text>
           </Pressable>
         )}
       </View>

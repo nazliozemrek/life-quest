@@ -1,3 +1,4 @@
+import { translate, type Msg } from "../src/i18n";
 import { describe, expect, it } from "vitest";
 import { latLngToCell } from "h3-js";
 import { QuestBatchSchema, validateBatch, type PlayerContext } from "../../src/quests/quest-generator";
@@ -9,6 +10,8 @@ import { applyFixes, completeQuest, hud, planWalk, previewAward, questGate, spaw
 
 const NOW = Date.UTC(2026, 9, 5, 7, 0);
 const gym = WAYPOINTS.find(w => w.id === "wp_gym")!;
+
+const en = (m: Msg) => translate("en", m.key, m.params);
 
 describe("mock quest batch", () => {
   it("is a batch the generator contract accepts unchanged", () => {
@@ -42,13 +45,13 @@ describe("session", () => {
     const q2 = s.quests.find(e => e.quest.local_id === "q2")!.quest;
     const preview = previewAward(s, q2);
     const r = completeQuest(s, "q2");
-    if (!r.ok) throw new Error(r.reason);
+    if (!r.ok) throw new Error(r.reason.key);
     expect(r.award.totalXp).toBe(preview.totalXp);
     expect(r.session.player.totalXp).toBe(s.player.totalXp + preview.totalXp);
     expect(r.session.player.rested).toBe(s.player.rested - preview.restedConsumed);
     expect(r.session.player.skills.craft.xp).toBe(s.player.skills.craft.xp + preview.perSkill.craft!);
     expect(r.session.quests.find(e => e.quest.local_id === "q2")!.status).toBe("done");
-    expect(completeQuest(r.session, "q2")).toEqual({ ok: false, reason: "Already completed" });
+    expect(completeQuest(r.session, "q2")).toMatchObject({ ok: false, reason: { key: "gate.alreadyDone" } });
   });
 
   it("idle skills earn the comeback bonus and lose it once trained", () => {
@@ -57,9 +60,10 @@ describe("session", () => {
     const q6 = s.quests.find(e => e.quest.local_id === "q6")!.quest;
     // Same tier and weights; only wealth's Form differs between the two awards.
     const first = completeQuest(s, "q5");
-    if (!first.ok) throw new Error(first.reason);
+    if (!first.ok) throw new Error(first.reason.key);
     expect(first.award.perSkill.wealth!).toBeGreaterThan(previewAward(first.session, q6).perSkill.wealth!);
-    expect(questGate(s, q6)).toEqual({ ok: false, reason: `Finish "${q5.title}" first` });
+    const g6 = questGate(s, q6);
+    expect(!g6.ok && en(g6.reason)).toBe(`Finish "${q5.title}" first`);
     expect(questGate(first.session, q6)).toEqual({ ok: true });
   });
 
@@ -67,7 +71,7 @@ describe("session", () => {
     const s = createSession(NOW);
     const edge = playerLevels.xpToReach(hud(s).level + 1) - 1;
     const r = completeQuest({ ...s, player: { ...s.player, totalXp: edge } }, "q1");
-    if (!r.ok) throw new Error(r.reason);
+    if (!r.ok) throw new Error(r.reason.key);
     expect(r.levelUp).toEqual({ from: hud(s).level, to: hud(s).level + 1 });
   });
 
@@ -76,7 +80,7 @@ describe("session", () => {
     const q3 = s.quests.find(e => e.quest.local_id === "q3")!.quest;
     const gate = questGate(s, q3);
     expect(gate.ok).toBe(false);
-    expect(!gate.ok && gate.reason).toMatch(/^Go to Iron Hall Gym/);
+    expect(!gate.ok && en(gate.reason)).toMatch(/^Go to Iron Hall Gym/);
     const there = walkTo(s, gym).session;
     expect(questGate(there, q3)).toEqual({ ok: true });
   });

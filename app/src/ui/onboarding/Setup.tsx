@@ -4,16 +4,18 @@ import { useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { Fix } from "../../../../src/spatial/spatial-engine";
-import { GOAL_SUGGESTIONS, MAX_GOALS, PLACE_INFO, placeWaypoints, type Goal, type Horizon, type Place, type PlaceKind } from "../../game/setup";
+import { GOAL_SUGGESTIONS, MAX_GOALS, placeWaypoints, type Goal, type Horizon, type Place, type PlaceKind } from "../../game/setup";
 import { GameMap } from "../map/GameMap";
 import type { LatLng } from "../map/types";
 import { color, skillColor } from "../theme";
 import { Button, Chip, useKeyboardInset } from "./parts";
+import { useT } from "../settings";
 
-const HORIZONS: [Horizon, string][] = [["week", "This week"], ["month", "This month"], ["year", "This year"]];
+const HORIZONS: Horizon[] = ["week", "month", "year"];
 const KINDS: PlaceKind[] = ["home", "work", "gym"];
 
 export function GoalsStep({ goals, setGoals, onNext }: { goals: Goal[]; setGoals: (g: Goal[]) => void; onNext: () => void }) {
+  const t = useT();
   const [custom, setCustom] = useState("");
   const keyboard = useKeyboardInset();
   const full = goals.length >= MAX_GOALS;
@@ -27,22 +29,22 @@ export function GoalsStep({ goals, setGoals, onNext }: { goals: Goal[]; setGoals
   return (
     <View style={[styles.fill, { paddingBottom: keyboard }]}>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <Text style={styles.title}>Your main quests</Text>
-        <Text style={styles.hint}>Pick up to three things you want to work toward. Daily quests will push you there.</Text>
+        <Text style={styles.title}>{t("setup.goals.title")}</Text>
+        <Text style={styles.hint}>{t("setup.goals.hint")}</Text>
 
         {goals.map(g => (
           <View key={g.id} style={[styles.goal, g.skill && { borderColor: skillColor[g.skill] }]}>
             <View style={styles.goalTop}>
-              <Text style={styles.goalTitle} numberOfLines={2}>{g.title}</Text>
-              <Pressable onPress={() => remove(g.id)} hitSlop={10} accessibilityLabel={`Remove ${g.title}`}>
+              <Text style={styles.goalTitle} numberOfLines={2}>{t.p(g.title)}</Text>
+              <Pressable onPress={() => remove(g.id)} hitSlop={10} accessibilityLabel={t("setup.remove", { title: t.p(g.title) })}>
                 <Text style={styles.remove}>✕</Text>
               </Pressable>
             </View>
             <View style={styles.horizons}>
-              {HORIZONS.map(([h, label]) => (
+              {HORIZONS.map(h => (
                 <Pressable key={h} onPress={() => setGoals(goals.map(x => (x.id === g.id ? { ...x, horizon: h } : x)))}
                   style={[styles.pill, g.horizon === h && styles.pillOn]} accessibilityState={{ selected: g.horizon === h }}>
-                  <Text style={[styles.pillText, g.horizon === h && styles.pillTextOn]}>{label}</Text>
+                  <Text style={[styles.pillText, g.horizon === h && styles.pillTextOn]}>{t(`horizon.${h}`)}</Text>
                 </Pressable>
               ))}
             </View>
@@ -53,25 +55,25 @@ export function GoalsStep({ goals, setGoals, onNext }: { goals: Goal[]; setGoals
           <>
             <View style={styles.chips}>
               {GOAL_SUGGESTIONS.filter(s => !has(s.title)).map(s => (
-                <Chip key={s.title} label={s.title} on={false} tint={skillColor[s.skill]} onPress={() => add(s.title, s.skill)} />
+                <Chip key={s.title} label={t.p(s.title)} on={false} tint={skillColor[s.skill]} onPress={() => add(s.title, s.skill)} />
               ))}
             </View>
             <View style={styles.customRow}>
               <TextInput
-                style={styles.input} value={custom} onChangeText={setCustom} placeholder="Or write your own"
+                style={styles.input} value={custom} onChangeText={setCustom} placeholder={t("setup.goals.custom")}
                 placeholderTextColor={color.textFaint} maxLength={80} returnKeyType="done" keyboardAppearance="dark"
                 onSubmitEditing={() => { add(custom, null); setCustom(""); }}
               />
               <Pressable onPress={() => { add(custom, null); setCustom(""); }} disabled={!custom.trim()}
-                style={[styles.addBtn, !custom.trim() && styles.dim]} accessibilityLabel="Add goal">
-                <Text style={styles.addText}>Add</Text>
+                style={[styles.addBtn, !custom.trim() && styles.dim]} accessibilityLabel={t("setup.goals.addLabel")}>
+                <Text style={styles.addText}>{t("setup.goals.add")}</Text>
               </Pressable>
             </View>
           </>
         )}
       </ScrollView>
       <View style={styles.footer}>
-        <Button label={goals.length ? "Continue" : "Skip for now"} secondary={!goals.length} onPress={onNext} />
+        <Button label={t(goals.length ? "common.continue" : "common.skipForNow")} secondary={!goals.length} onPress={onNext} />
       </View>
     </View>
   );
@@ -80,9 +82,10 @@ export function GoalsStep({ goals, setGoals, onNext }: { goals: Goal[]; setGoals
 export function PlacesStep({ places, setPlaces, explored, position, onNext }: {
   places: Place[]; setPlaces: (p: Place[]) => void; explored: ReadonlySet<string>; position: Fix; onNext: () => void;
 }) {
+  const t = useT();
   const [kind, setKind] = useState<PlaceKind>("home");
   const [focus, setFocus] = useState<LatLng | null>(null);
-  const waypoints = useMemo(() => placeWaypoints(places), [places]);
+  const waypoints = useMemo(() => placeWaypoints(places).map(w => ({ ...w, name: t(`place.${w.kind}` as "place.home") })), [places, t]);
   const put = (at: LatLng) => {
     setPlaces([...places.filter(p => p.kind !== kind), { kind, lat: at.lat, lng: at.lng }]);
     setFocus(at);
@@ -94,8 +97,8 @@ export function PlacesStep({ places, setPlaces, explored, position, onNext }: {
 
   return (
     <View style={styles.fill}>
-      <Text style={styles.title}>Your places</Text>
-      <Text style={styles.hint}>Pick a place, then tap the map where it is. They stay on this phone; quests only see "Home", "Work" or "Gym".</Text>
+      <Text style={styles.title}>{t("setup.places.title")}</Text>
+      <Text style={styles.hint}>{t("setup.places.hint")}</Text>
       <View style={styles.map}>
         <GameMap explored={explored} position={position} waypoints={waypoints} districts={[]} focus={focus} onPress={put} />
       </View>
@@ -105,11 +108,11 @@ export function PlacesStep({ places, setPlaces, explored, position, onNext }: {
           return (
             <Pressable key={k} onPress={() => setKind(k)} style={[styles.kind, kind === k && styles.kindOn]}
               accessibilityRole="button" accessibilityState={{ selected: kind === k }}>
-              <Text style={[styles.kindLabel, kind === k && styles.kindLabelOn]}>{PLACE_INFO[k].name}</Text>
-              <Text style={styles.kindState}>{set ? "Pinned" : "Not set"}</Text>
+              <Text style={[styles.kindLabel, kind === k && styles.kindLabelOn]}>{t(`place.${k}`)}</Text>
+              <Text style={styles.kindState}>{t(set ? "setup.places.pinned" : "setup.places.notSet")}</Text>
               {set && (
-                <Pressable onPress={() => clear(k)} hitSlop={8} accessibilityLabel={`Clear ${PLACE_INFO[k].name}`}>
-                  <Text style={styles.clear}>Clear</Text>
+                <Pressable onPress={() => clear(k)} hitSlop={8} accessibilityLabel={t("setup.places.clearLabel", { place: t(`place.${k}`) })}>
+                  <Text style={styles.clear}>{t("setup.places.clear")}</Text>
                 </Pressable>
               )}
             </Pressable>
@@ -118,11 +121,11 @@ export function PlacesStep({ places, setPlaces, explored, position, onNext }: {
       </View>
       <View style={styles.footerRow}>
         <View style={styles.fill}>
-          <Button label={`${PLACE_INFO[kind].name} is where I am`} secondary onPress={() => put({ lat: position.lat, lng: position.lng })} />
+          <Button label={t("setup.places.here", { place: t(`place.${kind}`) })} secondary onPress={() => put({ lat: position.lat, lng: position.lng })} />
         </View>
       </View>
       <View style={styles.footer}>
-        <Button label={places.length ? "Continue" : "Skip for now"} secondary={!places.length} onPress={onNext} />
+        <Button label={t(places.length ? "common.continue" : "common.skipForNow")} secondary={!places.length} onPress={onNext} />
       </View>
     </View>
   );
@@ -133,6 +136,7 @@ export function SetupFlow({ explored, position, onDone, onCancel, initialGoals =
   explored: ReadonlySet<string>; position: Fix; onDone: (goals: Goal[], places: Place[]) => void;
   onCancel?: () => void; initialGoals?: Goal[]; initialPlaces?: Place[];
 }) {
+  const t = useT();
   const [step, setStep] = useState<"goals" | "places">("goals");
   const [goals, setGoals] = useState<Goal[]>(initialGoals);
   const [places, setPlaces] = useState<Place[]>(initialPlaces);
@@ -140,10 +144,10 @@ export function SetupFlow({ explored, position, onDone, onCancel, initialGoals =
     <SafeAreaView style={styles.screen} edges={["top", "bottom"]}>
       <View style={styles.topBar}>
         {step === "places" ? (
-          <Pressable onPress={() => setStep("goals")} hitSlop={12}><Text style={styles.topLink}>‹ Back</Text></Pressable>
+          <Pressable onPress={() => setStep("goals")} hitSlop={12}><Text style={styles.topLink}>{t("common.back")}</Text></Pressable>
         ) : onCancel ? (
-          <Pressable onPress={onCancel} hitSlop={12}><Text style={styles.topLink}>‹ Cancel</Text></Pressable>
-        ) : <Text style={styles.kicker}>NEW: GOALS AND PLACES</Text>}
+          <Pressable onPress={onCancel} hitSlop={12}><Text style={styles.topLink}>{t("common.cancel")}</Text></Pressable>
+        ) : <Text style={styles.kicker}>{t("setup.kicker")}</Text>}
       </View>
       <View style={styles.body}>
         {step === "goals"

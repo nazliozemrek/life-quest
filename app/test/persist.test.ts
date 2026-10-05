@@ -11,7 +11,7 @@ const fresh = () => createSession(NOW);
 function played() {
   let s = fresh();
   const r = completeQuest(s, "q1");
-  if (!r.ok) throw new Error(r.reason);
+  if (!r.ok) throw new Error(r.reason.key);
   s = walkTo(r.session, { lat: s.position.lat + 0.003, lng: s.position.lng }).session;
   return { s, raw: JSON.stringify(serialize(s, "2026-10-05")) };
 }

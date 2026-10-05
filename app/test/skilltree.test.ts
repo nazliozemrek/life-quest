@@ -5,8 +5,10 @@ import { MOCK_QUESTS, createSession } from "../src/game/mock-world";
 import { SKIPPED, startGame } from "../src/game/onboarding";
 import { poolQuests } from "../src/game/context";
 import { previewAward, type Player, type Session } from "../src/game/session";
+import { translate, type Msg } from "../src/i18n";
 import { NODES, TREES, availableCount, canUnlock, focusSkills, points, titles, unlockNode, xpBonus } from "../src/game/skilltree";
 
+const en = (m: Msg) => translate("en", m.key, m.params);
 const NOW = Date.UTC(2026, 9, 5, 7, 0);
 const bard = () => startGame(createSession(NOW), "Kaan", { ...SKIPPED, focusClass: "bard" }, NOW).session;
 
@@ -14,10 +16,14 @@ const bard = () => startGame(createSession(NOW), "Kaan", { ...SKIPPED, focusClas
 function atLevel(p: Player, skill: keyof Player["skills"], level: number): Player {
   return { ...p, skills: { ...p.skills, [skill]: { ...p.skills[skill], xp: skillLevels.xpToReach(level) } } };
 }
+function why(p: Player, id: string) {
+  const c = canUnlock(p, id);
+  return c.ok ? "ok" : en(c.reason);
+}
 function buy(p: Player, ...ids: string[]): Player {
   return ids.reduce((acc, id) => {
     const r = unlockNode(acc, id);
-    if (!r.ok) throw new Error(`${id}: ${r.reason}`);
+    if (!r.ok) throw new Error(`${id}: ${en(r.reason)}`);
     return r.player;
   }, p);
 }
@@ -41,14 +47,14 @@ describe("skill trees", () => {
 
   it("enforces level, parent, points and the capstone rule", () => {
     let p = atLevel(bard().player, "charisma", 3);
-    expect(canUnlock(p, "charisma.kindred_spirit")).toMatchObject({ ok: false, reason: "Needs Warm Welcome" });
-    expect(canUnlock(p, "vitality.iron_lungs")).toMatchObject({ ok: false, reason: "Needs Warrior's Resolve" });
+    expect(why(p, "charisma.kindred_spirit")).toBe("Needs Warm Welcome");
+    expect(why(p, "vitality.iron_lungs")).toBe("Needs Warrior's Resolve");
     p = buy(p, "charisma.warm_welcome", "charisma.open_door", "charisma.the_friendly");
-    expect(canUnlock(p, "charisma.kindred_spirit")).toMatchObject({ ok: false, reason: "Reach charisma level 6" });
+    expect(why(p, "charisma.kindred_spirit")).toBe("Reach Charisma level 6");
     expect(points(p, "charisma").free).toBe(0);
 
     p = atLevel(p, "charisma", 15);
-    expect(canUnlock(p, "charisma.legend_of_the_tavern")).toMatchObject({ ok: false, reason: "Needs a tier 3 node" });
+    expect(why(p, "charisma.legend_of_the_tavern")).toBe("Needs a tier 3 node");
     p = buy(p, "charisma.kindred_spirit", "charisma.beloved", "charisma.legend_of_the_tavern");
     expect(points(p, "charisma")).toEqual({ total: 15, spent: 7, free: 8 });
     expect(xpBonus(p).charisma).toBeCloseTo(0.05 + 0.03 + 0.04 + 0.05 + 0.05);

@@ -6,17 +6,16 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { CLASSES } from "../../../../src/onboarding/calibration";
 import { playerLevels, skillLevels, type SkillCode } from "../../../../src/xp/xp-engine";
 import { SKILLS, type Player, type Session } from "../../game/session";
-import { PLACE_INFO, type Goal, type Place, type PlaceKind } from "../../game/setup";
+import { type Goal, type Place, type PlaceKind } from "../../game/setup";
 import {
   NODES, TREES, canUnlock, nodeState, points, titles, xpBonus, type SkillNode,
 } from "../../game/skilltree";
 import { SetupFlow } from "../onboarding/Setup";
-import { color, skillColor, skillLabel } from "../theme";
+import { color, skillColor } from "../theme";
+import { useSettings, useT } from "../settings";
+import { say } from "../../i18n";
 
-const CLASS_NAME = { warrior: "Warrior", artisan: "Artisan", merchant: "Merchant", bard: "Bard", sage: "Sage" } as const;
-const SKILL_NAME: Record<SkillCode, string> = { vitality: "Vitality", craft: "Craft", wealth: "Wealth", charisma: "Charisma", mindset: "Mindset" };
-const HORIZON = { week: "This week", month: "This month", year: "This year" } as const;
-const BRANCHES = [["mastery", "Mastery"], ["path", "Path"], ["renown", "Renown"]] as const;
+const BRANCHES = ["mastery", "path", "renown"] as const;
 
 export interface ProfileProps {
   session: Session;
@@ -27,6 +26,7 @@ export interface ProfileProps {
 }
 
 export function Profile({ session, onClose, onUnlock, onTitle, onEditSetup }: ProfileProps) {
+  const { t, settings, update } = useSettings();
   const p = session.player;
   const classSkill = p.profile ? CLASSES[p.profile.className].skill : "vitality";
   const [tab, setTab] = useState<SkillCode>(classSkill);
@@ -47,56 +47,56 @@ export function Profile({ session, onClose, onUnlock, onTitle, onEditSetup }: Pr
   }
 
   const level = playerLevels.progress(p.totalXp);
-  const cls = p.profile ? CLASS_NAME[p.profile.className] : null;
+  const cls = p.profile ? t(`class.${p.profile.className}`) : null;
   const owned = titles(p);
   const goals = p.profile?.goals ?? [];
 
   return (
     <SafeAreaView style={styles.screen} edges={["top", "bottom"]}>
       <View style={styles.topBar}>
-        <Text style={styles.kicker}>CHARACTER</Text>
-        <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button" accessibilityLabel="Close">
+        <Text style={styles.kicker}>{t("profile.kicker")}</Text>
+        <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button" accessibilityLabel={t("common.close")}>
           <Text style={styles.close}>✕</Text>
         </Pressable>
       </View>
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.hero}>
           <View style={styles.badge}>
-            <Text style={styles.badgeLabel}>LV</Text>
+            <Text style={styles.badgeLabel}>{t("hud.lv")}</Text>
             <Text style={styles.badgeLevel}>{level.level}</Text>
           </View>
           <View style={styles.fill}>
             <Text style={styles.name} numberOfLines={1}>{p.name}</Text>
-            <Text style={styles.sub}>{[p.title, cls].filter(Boolean).join(" · ")}</Text>
+            <Text style={styles.sub}>{[p.title && t.p(p.title), cls].filter(Boolean).join(" · ")}</Text>
             <Text style={styles.stats}>
-              {p.totalXp.toLocaleString()} XP · {p.streakDays}-day streak · {p.difficulty[0].toUpperCase() + p.difficulty.slice(1)} mode
+              {t("profile.stats", { xp: p.totalXp.toLocaleString(t.lang), streak: t("hud.streak", { n: p.streakDays }), mode: t(`mode.${p.difficulty}`) })}
             </Text>
           </View>
         </View>
 
         {owned.length > 0 && (
-          <Section title="Title">
+          <Section title={t("profile.title")}>
             <View style={styles.wrap}>
-              <Pill label={cls ?? "None"} on={!p.title} onPress={() => onTitle(null)} />
-              {owned.map(t => <Pill key={t} label={t} on={p.title === t} onPress={() => onTitle(t)} />)}
+              <Pill label={cls ?? t("profile.none")} on={!p.title} onPress={() => onTitle(null)} />
+              {owned.map(x => <Pill key={x} label={t.p(x)} on={p.title === x} onPress={() => onTitle(x)} />)}
             </View>
           </Section>
         )}
 
-        <Section title="Main quests" action={{ label: "Edit", onPress: () => setEditing(true) }}>
+        <Section title={t("profile.goals")} action={{ label: t("profile.edit"), onPress: () => setEditing(true) }}>
           {goals.length ? goals.map(g => (
             <View key={g.id} style={styles.goal}>
               <View style={[styles.goalDot, { backgroundColor: g.skill ? skillColor[g.skill] : color.xp }]} />
-              <Text style={styles.goalTitle} numberOfLines={1}>{g.title}</Text>
-              <Text style={styles.goalHorizon}>{HORIZON[g.horizon]}</Text>
+              <Text style={styles.goalTitle} numberOfLines={1}>{t.p(g.title)}</Text>
+              <Text style={styles.goalHorizon}>{t(`horizon.${g.horizon}`)}</Text>
             </View>
-          )) : <Text style={styles.empty}>No goals yet.</Text>}
+          )) : <Text style={styles.empty}>{t("profile.noGoals")}</Text>}
           <Text style={styles.places}>
-            {places.length ? `Places: ${places.map(x => PLACE_INFO[x.kind].name).join(", ")}` : "No places pinned."}
+            {places.length ? t("profile.places", { list: places.map(x => t(`place.${x.kind}`)).join(", ") }) : t("profile.noPlaces")}
           </Text>
         </Section>
 
-        <Section title="Skill trees">
+        <Section title={t("profile.trees")}>
           <View style={styles.tabs}>
             {SKILLS.map(s => {
               const free = points(p, s).free;
@@ -104,7 +104,7 @@ export function Profile({ session, onClose, onUnlock, onTitle, onEditSetup }: Pr
                 <Pressable key={s} onPress={() => { setTab(s); setPicked(null); }}
                   style={[styles.tab, tab === s && { borderColor: skillColor[s], backgroundColor: `${skillColor[s]}1F` }]}
                   accessibilityRole="tab" accessibilityState={{ selected: tab === s }}>
-                  <Text style={[styles.tabCode, { color: skillColor[s] }]}>{skillLabel[s]}</Text>
+                  <Text style={[styles.tabCode, { color: skillColor[s] }]}>{t(`skillShort.${s}`)}</Text>
                   <Text style={styles.tabLevel}>{skillLevels.levelFor(p.skills[s].xp)}</Text>
                   {free > 0 && <View style={[styles.dot, { backgroundColor: skillColor[s] }]} />}
                 </Pressable>
@@ -112,6 +112,19 @@ export function Profile({ session, onClose, onUnlock, onTitle, onEditSetup }: Pr
             })}
           </View>
           <Tree player={p} skill={tab} picked={picked} onPick={setPicked} />
+        </Section>
+        <Section title={t("profile.settings")}>
+          <Text style={styles.settingLabel}>{t("profile.language")}</Text>
+          <View style={styles.wrap}>
+            <Pill label="Türkçe" on={settings.lang === "tr"} onPress={() => update({ lang: "tr" })} />
+            <Pill label="English" on={settings.lang === "en"} onPress={() => update({ lang: "en" })} />
+          </View>
+          <Text style={styles.settingLabel}>{t("profile.reminders")}</Text>
+          <View style={styles.wrap}>
+            <Pill label={t("profile.on")} on={settings.reminders === true} onPress={() => update({ reminders: true })} />
+            <Pill label={t("profile.off")} on={settings.reminders === false} onPress={() => update({ reminders: false })} />
+          </View>
+          <Text style={styles.places}>{t("profile.remindersHint")}</Text>
         </Section>
       </ScrollView>
 
@@ -121,6 +134,7 @@ export function Profile({ session, onClose, onUnlock, onTitle, onEditSetup }: Pr
 }
 
 function Tree({ player, skill, picked, onPick }: { player: Player; skill: SkillCode; picked: string | null; onPick(id: string): void }) {
+  const t = useT();
   const nodes = TREES[skill];
   const pts = points(player, skill);
   const bonus = Math.round((xpBonus(player)[skill] ?? 0) * 100);
@@ -130,14 +144,14 @@ function Tree({ player, skill, picked, onPick }: { player: Player; skill: SkillC
   return (
     <View style={styles.tree}>
       <Text style={styles.treeHead}>
-        <Text style={[styles.treeName, { color: tint }]}>{SKILL_NAME[skill]}</Text>
-        {`  ${pts.free} point${pts.free === 1 ? "" : "s"} to spend · +${bonus}% XP`}
+        <Text style={[styles.treeName, { color: tint }]}>{t(`skill.${skill}`)}</Text>
+        {"  " + t(pts.free === 1 ? "profile.pointsOne" : "profile.points", { n: pts.free, bonus })}
       </Text>
       <Node node={root} player={player} picked={picked} onPick={onPick} wide />
       <View style={styles.columns}>
-        {BRANCHES.map(([branch, label]) => (
+        {BRANCHES.map(branch => (
           <View key={branch} style={styles.column}>
-            <Text style={styles.branch}>{label}</Text>
+            <Text style={styles.branch}>{t(`profile.branch.${branch}`)}</Text>
             {nodes.filter(n => n.branch === branch).map(n => (
               <Node key={n.id} node={n} player={player} picked={picked} onPick={onPick} />
             ))}
@@ -150,10 +164,11 @@ function Tree({ player, skill, picked, onPick }: { player: Player; skill: SkillC
 }
 
 function Node({ node, player, picked, onPick, wide }: { node: SkillNode; player: Player; picked: string | null; onPick(id: string): void; wide?: boolean }) {
+  const t = useT();
   const state = nodeState(player, node.id);
   const tint = skillColor[node.skill];
   return (
-    <Pressable onPress={() => onPick(node.id)} accessibilityRole="button" accessibilityLabel={`${node.name}, ${state}`}
+    <Pressable onPress={() => onPick(node.id)} accessibilityRole="button" accessibilityLabel={`${t.p(node.name)}, ${t(`profile.state.${state}`)}`}
       style={[
         styles.node, wide && styles.nodeWide,
         state === "owned" && { borderColor: tint, backgroundColor: `${tint}26` },
@@ -161,33 +176,34 @@ function Node({ node, player, picked, onPick, wide }: { node: SkillNode; player:
         state === "locked" && styles.nodeLocked,
         picked === node.id && styles.nodePicked,
       ]}>
-      <Text style={[styles.nodeName, state === "locked" && styles.dimText]} numberOfLines={2}>{node.name}</Text>
+      <Text style={[styles.nodeName, state === "locked" && styles.dimText]} numberOfLines={2}>{t.p(node.name)}</Text>
       <Text style={styles.nodeMeta} numberOfLines={1}>
-        {state === "owned" ? "✓ Unlocked" : state === "available" ? `Unlock · ${node.cost} pt` : `Lv ${node.requiredLevel}`}
+        {state === "owned" ? `✓ ${t("profile.state.owned")}` : state === "available" ? t("profile.unlockCost", { n: node.cost }) : t("profile.reqLevel", { n: node.requiredLevel })}
       </Text>
     </Pressable>
   );
 }
 
 function Detail({ player, id, onUnlock, onClose }: { player: Player; id: string; onUnlock(): void; onClose(): void }) {
+  const t = useT();
   const n = NODES.get(id)!;
   const state = nodeState(player, id);
   const check = canUnlock(player, id);
   return (
     <View style={styles.detail}>
       <View style={styles.detailTop}>
-        <Text style={[styles.detailName, { color: skillColor[n.skill] }]}>{n.name}</Text>
-        <Pressable onPress={onClose} hitSlop={10} accessibilityLabel="Close details"><Text style={styles.close}>✕</Text></Pressable>
+        <Text style={[styles.detailName, { color: skillColor[n.skill] }]}>{t.p(n.name)}</Text>
+        <Pressable onPress={onClose} hitSlop={10} accessibilityLabel={t("common.close")}><Text style={styles.close}>✕</Text></Pressable>
       </View>
-      <Text style={styles.detailDesc}>{n.description}</Text>
+      <Text style={styles.detailDesc}>{say(t, n.description)}</Text>
       {state === "owned" ? (
-        <Text style={styles.detailState}>Unlocked</Text>
+        <Text style={styles.detailState}>{t("profile.state.owned")}</Text>
       ) : check.ok ? (
         <Pressable onPress={onUnlock} style={styles.unlock} accessibilityRole="button">
-          <Text style={styles.unlockText}>Unlock for {n.cost} point{n.cost === 1 ? "" : "s"}</Text>
+          <Text style={styles.unlockText}>{t(n.cost === 1 ? "profile.unlockOne" : "profile.unlockMany", { n: n.cost })}</Text>
         </Pressable>
       ) : (
-        <Text style={styles.detailState}>{check.reason}</Text>
+        <Text style={styles.detailState}>{say(t, check.reason)}</Text>
       )}
     </View>
   );
@@ -246,6 +262,7 @@ const styles = StyleSheet.create({
   goalDot: { width: 8, height: 8, borderRadius: 4 },
   goalTitle: { color: color.text, fontSize: 15, flex: 1 },
   goalHorizon: { color: color.textDim, fontSize: 12 },
+  settingLabel: { color: color.textDim, fontSize: 12, fontWeight: "700", letterSpacing: 0.5, marginTop: 2 },
   empty: { color: color.textDim, fontSize: 14 },
   places: { color: color.textDim, fontSize: 12 },
   tabs: { flexDirection: "row", gap: 6 },

@@ -1,19 +1,19 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { Hud, Player } from "../game/session";
-import { color, skillColor, skillLabel } from "./theme";
+import { useT } from "./settings";
+import { color, skillColor } from "./theme";
 import { XpBar } from "./XpBar";
-
-const CLASS_NAME = { warrior: "Warrior", artisan: "Artisan", merchant: "Merchant", bard: "Bard", sage: "Sage" } as const;
 
 /** Tap anywhere on it to open the character sheet. `points` > 0 shows a gold dot: there's a skill node to buy. */
 export function HudHeader({ hud, player, points, onPress }: { hud: Hud; player: Player; points: number; onPress(): void }) {
-  const cls = player.title ?? (player.profile && CLASS_NAME[player.profile.className]);
+  const t = useT();
+  const cls = player.title ? t.p(player.title) : player.profile && t(`class.${player.profile.className}`);
   return (
     <Pressable onPress={onPress} style={styles.panel} accessibilityRole="button"
-      accessibilityLabel={`Open character${points ? `, ${points} skill unlocks available` : ""}`}>
+      accessibilityLabel={points ? t("hud.openCharacterPoints", { n: points }) : t("hud.openCharacter")}>
       <View style={styles.row}>
         <View style={styles.badge}>
-          <Text style={styles.badgeLabel}>LV</Text>
+          <Text style={styles.badgeLabel}>{t("hud.lv")}</Text>
           <Text style={styles.badgeLevel}>{hud.level}</Text>
           {points > 0 && <View style={styles.pointsDot}><Text style={styles.pointsText}>{points}</Text></View>}
         </View>
@@ -23,7 +23,7 @@ export function HudHeader({ hud, player, points, onPress }: { hud: Hud; player: 
               {player.name}{cls && <Text style={styles.cls}>  {cls}</Text>}
             </Text>
             <Text style={styles.streak}>
-              {hud.streakDays}-day streak <Text style={styles.mult}>×{hud.streakMult.toFixed(2)}</Text>
+              {t("hud.streak", { n: hud.streakDays })} <Text style={styles.mult}>×{hud.streakMult.toFixed(2)}</Text>
             </Text>
           </View>
           <XpBar level={hud.level} into={hud.into} need={hud.need} pct={hud.pct} restedPct={hud.restedPct} />
@@ -34,7 +34,7 @@ export function HudHeader({ hud, player, points, onPress }: { hud: Hud; player: 
         {hud.skills.map(s => (
           // Form fades the chip: a rusty skill reads as dimmed, which is also the hint that it pays a comeback bonus.
           <View key={s.code} style={[styles.skill, { opacity: 0.45 + 0.55 * s.form }]}>
-            <Text style={[styles.skillCode, { color: skillColor[s.code] }]}>{skillLabel[s.code]}</Text>
+            <Text style={[styles.skillCode, { color: skillColor[s.code] }]}>{t(`skillShort.${s.code}`)}</Text>
             <Text style={styles.skillLevel}>{s.level}</Text>
             <View style={styles.skillTrack}>
               <View style={[styles.skillFill, { width: `${s.pct * 100}%`, backgroundColor: skillColor[s.code] }]} />

@@ -14,6 +14,7 @@
 import { CLASSES } from "../../../src/onboarding/calibration";
 import { skillLevels, type SkillCode } from "../../../src/xp/xp-engine";
 import type { Player } from "./session";
+import { msg, ph, type Msg } from "../i18n";
 
 // Not imported from ./session: that module imports this one, and the trees are built at load time.
 const SKILLS: readonly SkillCode[] = ["vitality", "craft", "wealth", "charisma", "mindset"];
@@ -24,7 +25,7 @@ export interface SkillNode {
   id: string;
   skill: SkillCode;
   name: string;
-  description: string;
+  description: Msg;
   branch: "root" | "mastery" | "path" | "renown" | "capstone";
   tier: 0 | 1 | 2 | 3 | 4;
   requiredLevel: number;
@@ -74,13 +75,13 @@ function slug(s: string) {
 
 function build(skill: SkillCode): SkillNode[] {
   const n = NAMES[skill];
-  const pct = (x: number) => `+${Math.round(x * 100)}% ${skill} XP`;
+  const pct = (x: number) => msg("node.desc.xp", { pct: Math.round(x * 100), skill: msg(`skill.${skill}`) });
   const root: SkillNode = {
     id: Object.values(CLASSES).find(c => c.skill === skill)!.startingNode, skill, name: n.root, branch: "root", tier: 0,
     requiredLevel: TIER_LEVEL[0], cost: 1, parent: null, effects: [{ xp: ROOT_XP }], description: pct(ROOT_XP),
   };
   const nodes: SkillNode[] = [root];
-  const chain = (branch: "mastery" | "path" | "renown", names: string[], effects: Effect[][], describe: string[]) => {
+  const chain = (branch: "mastery" | "path" | "renown", names: string[], effects: Effect[][], describe: Msg[]) => {
     let parent = root.id;
     names.forEach((name, i) => {
       const id = `${skill}.${slug(name)}`;
@@ -94,19 +95,22 @@ function build(skill: SkillCode): SkillNode[] {
   chain("mastery", n.mastery, MASTERY_XP.map(x => [{ xp: x }]), MASTERY_XP.map(pct));
   chain("path", n.path,
     [[{ focus: true }], [{ xp: 0.03 }], [{ title: n.path[2] }]],
-    [`Daily quests lean toward ${n.focus}`, pct(0.03), `Title: ${n.path[2]}`]);
+    [msg("node.desc.focus", { area: ph(n.focus) }), pct(0.03), msg("node.desc.title", { title: ph(n.path[2]) })]);
   chain("renown", n.renown,
     [[{ title: n.renown[0] }], [{ xp: 0.02 }], [{ title: n.renown[2] }]],
-    [`Title: ${n.renown[0]}`, pct(0.02), `Title: ${n.renown[2]}`]);
+    [msg("node.desc.title", { title: ph(n.renown[0]) }), pct(0.02), msg("node.desc.title", { title: ph(n.renown[2]) })]);
   nodes.push({
     id: `${skill}.${slug(n.capstone)}`, skill, name: n.capstone, branch: "capstone", tier: 4, requiredLevel: TIER_LEVEL[4],
     cost: 2, parent: null, effects: [{ xp: CAPSTONE_XP }, { title: n.capstone }],
-    description: `${pct(CAPSTONE_XP)} and the title ${n.capstone}`,
+    description: msg("node.desc.capstone", { xp: pct(CAPSTONE_XP), title: ph(n.capstone) }),
   });
   return nodes;
 }
 
 export const TREES: Record<SkillCode, SkillNode[]> = Object.fromEntries(SKILLS.map(s => [s, build(s)])) as Record<SkillCode, SkillNode[]>;
+/** A node's name as a translatable phrase. */
+export const nodeName = (id: string) => ph(NODES.get(id)?.name ?? id);
+
 export const NODES: ReadonlyMap<string, SkillNode> = new Map(SKILLS.flatMap(s => TREES[s]).map(n => [n.id, n]));
 
 /** Unlocked nodes: the ones bought, plus the class root, which every character starts with for free. */
@@ -127,20 +131,20 @@ export function points(p: Player, skill: SkillCode): { total: number; spent: num
 }
 
 export type NodeState = "owned" | "available" | "locked";
-export type Check = { ok: true } | { ok: false; reason: string };
+export type Check = { ok: true } | { ok: false; reason: Msg };
 
 export function canUnlock(p: Player, id: string): Check {
   const n = NODES.get(id);
-  if (!n) return { ok: false, reason: "Unknown node" };
+  if (!n) return { ok: false, reason: msg("node.unknown") };
   const owned = unlocked(p);
-  if (owned.has(id)) return { ok: false, reason: "Already unlocked" };
-  if (n.parent && !owned.has(n.parent)) return { ok: false, reason: `Needs ${NODES.get(n.parent)!.name}` };
+  if (owned.has(id)) return { ok: false, reason: msg("node.owned") };
+  if (n.parent && !owned.has(n.parent)) return { ok: false, reason: msg("node.needs", { node: nodeName(n.parent) }) };
   if (n.branch === "capstone" && !TREES[n.skill].some(m => m.tier === 3 && owned.has(m.id))) {
-    return { ok: false, reason: "Needs a tier 3 node" };
+    return { ok: false, reason: msg("node.needsTier3") };
   }
   const level = skillLevels.levelFor(p.skills[n.skill].xp);
-  if (level < n.requiredLevel) return { ok: false, reason: `Reach ${n.skill} level ${n.requiredLevel}` };
-  if (points(p, n.skill).free < n.cost) return { ok: false, reason: n.cost > 1 ? `Needs ${n.cost} points` : "No points left" };
+  if (level < n.requiredLevel) return { ok: false, reason: msg("node.reach", { skill: msg(`skill.${n.skill}`), level: n.requiredLevel }) };
+  if (points(p, n.skill).free < n.cost) return { ok: false, reason: n.cost > 1 ? msg("node.needsPoints", { n: n.cost }) : msg("node.noPoints") };
   return { ok: true };
 }
 
@@ -148,7 +152,7 @@ export function nodeState(p: Player, id: string): NodeState {
   return unlocked(p).has(id) ? "owned" : canUnlock(p, id).ok ? "available" : "locked";
 }
 
-export function unlockNode(p: Player, id: string): { ok: true; player: Player } | { ok: false; reason: string } {
+export function unlockNode(p: Player, id: string): { ok: true; player: Player } | { ok: false; reason: Msg } {
   const c = canUnlock(p, id);
   if (!c.ok) return c;
   return { ok: true, player: { ...p, nodes: [...(p.nodes ?? []), id] } };

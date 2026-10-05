@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { Modal, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { Quest } from "../../../src/quests/quest-generator";
-import { hud as toHud, previewAward, questGate } from "../game/session";
+import { isPinnedPlace, hud as toHud, previewAward, questGate } from "../game/session";
 import { availableCount } from "../game/skilltree";
 import { HudHeader } from "./HudHeader";
 import { Profile } from "./profile/Profile";
@@ -15,6 +15,8 @@ import { QuestList, type QuestRowModel } from "./QuestList";
 import { color } from "./theme";
 import { Toast } from "./Toast";
 import { useGameSession } from "./useGameSession";
+import { useReminders } from "./useReminders";
+import { useT } from "./settings";
 
 
 export function GameScreen() {
@@ -31,16 +33,19 @@ function World({ game }: { game: ReturnType<typeof useGameSession> }) {
   const { session, event, mode, walkTo, complete } = game;
   const [focused, setFocused] = useState<Quest | null>(null);
   const [sheet, setSheet] = useState(false);
+  const t = useT();
+  useReminders(session);
   const unlockable = useMemo(() => availableCount(session.player), [session.player]);
   const hud = useMemo(() => toHud(session), [session]);
 
   const rows = useMemo<QuestRowModel[]>(() => session.quests.map(entry => {
     const q = entry.quest;
-    const place = q.location.type === "waypoint"
-      ? session.waypoints.find(w => w.id === q.location.ref)?.name ?? null
-      : q.location.type === "district" ? session.districtNames[q.location.ref ?? ""] ?? "Frontier" : null;
+    const wp = q.location.type === "waypoint" ? session.waypoints.find(w => w.id === q.location.ref) : undefined;
+    const place = wp
+      ? (isPinnedPlace(wp) ? t(`place.${wp.kind}` as "place.home") : wp.name)
+      : q.location.type === "district" ? t.p(session.districtNames[q.location.ref ?? ""] ?? "Frontier") : null;
     return { entry, previewXp: previewAward(session, q).totalXp, gate: questGate(session, q), place };
-  }), [session]);
+  }), [session, t]);
 
   const focus = useMemo<LatLng | null>(() => {
     if (!focused) return null;
@@ -61,10 +66,13 @@ function World({ game }: { game: ReturnType<typeof useGameSession> }) {
     ];
   }, [hud.district.id, focused]);
 
+  const mapWaypoints = useMemo(() => session.waypoints.map(w => (isPinnedPlace(w) ? { ...w, name: t(`place.${w.kind}` as "place.home") } : w)),
+    [session.waypoints, t]);
+
   const mapProps: MapViewProps = {
     explored: session.explored,
     position: session.position,
-    waypoints: session.waypoints,
+    waypoints: mapWaypoints,
     districts,
     focus,
     onPress: target => {
@@ -84,13 +92,13 @@ function World({ game }: { game: ReturnType<typeof useGameSession> }) {
         <View style={styles.chips} pointerEvents="none">
           <View style={styles.chip}>
             <Text style={styles.chipText} numberOfLines={1}>
-              <Text style={styles.chipStrong}>{district.name}</Text>
-              {` ${Math.floor(district.pct * 100)}%`}
-              {district.next && ` · +${district.next.xp} XP at ${district.next.pct * 100}%`}
+              <Text style={styles.chipStrong}>{t.p(district.name)}</Text>
+              {" " + t("hud.pct", { n: Math.floor(district.pct * 100) })}
+              {district.next && ` · ${t("hud.districtNext", { xp: district.next.xp, pct: district.next.pct * 100 })}`}
             </Text>
           </View>
           {mode !== "starting" && (
-            <Text style={styles.hint} numberOfLines={1}>{mode === "gps" ? "GPS on · walk to explore" : "Tap map to walk"}</Text>
+            <Text style={styles.hint} numberOfLines={1}>{t(mode === "gps" ? "hud.gps" : "hud.tapToWalk")}</Text>
           )}
         </View>
       </SafeAreaView>

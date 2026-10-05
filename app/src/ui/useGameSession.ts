@@ -10,8 +10,11 @@ import { applySetup, type Goal, type Place } from "../game/setup";
 import { SAVE_KEY, dayKey, restore, serialize } from "../game/persist";
 import { applyFixes, completeQuest, planWalk, spawnAt, type Session } from "../game/session";
 import { creationOps, goalsOp, nodeOp, profileOp, questOp } from "../net/outbox";
-import { NODES, unlockNode } from "../game/skilltree";
+import { unlockNode } from "../game/skilltree";
 import { useCloudSync } from "../net/useCloudSync";
+import { buzz } from "./haptics";
+import { msg, type Msg } from "../i18n";
+import { nodeName } from "../game/skilltree";
 import type { LatLng } from "./map/types";
 
 /** Real time per simulated 10 s GPS fix. Fast enough to feel like a walk, slow enough to watch the fog lift. */
@@ -20,9 +23,9 @@ const STEP_MS = 70;
 const SAVE_DEBOUNCE_MS = 1000;
 
 export type GameEvent =
-  | { kind: "xp"; xp: number; title: string; levelUp: number | null }
-  | { kind: "error"; message: string }
-  | { kind: "info"; title: string };
+  | { kind: "xp"; xp: number; title: string; rationale?: string; levelUp: number | null }   // title/rationale: for questText
+  | { kind: "error"; message: Msg }
+  | { kind: "info"; title: Msg };
 
 /** "gps": the phone's location drives the player. "simulated": permission denied or unavailable, tap to walk. */
 export type MoveMode = "starting" | "gps" | "simulated";
@@ -60,7 +63,10 @@ export function useGameSession() {
     setSession(next);
   }, []);
 
-  const emit = useCallback((e: GameEvent) => setEvent({ ...e, id: ++eventId.current }), []);
+  const emit = useCallback((e: GameEvent) => {
+    buzz(e);
+    setEvent({ ...e, id: ++eventId.current });
+  }, []);
 
   const stopWalk = useCallback(() => {
     if (walkTimer.current) clearInterval(walkTimer.current);
@@ -137,7 +143,7 @@ export function useGameSession() {
   }, [stopWalk, commit]);
 
   const cloud = useCloudSync(loaded, session, latest, commit,
-    () => emit({ kind: "info", title: "New quests from the Quest Master" }));
+    () => emit({ kind: "info", title: msg("toast.newQuests") }));
 
   const complete = useCallback((localId: string, title: string) => {
     const s = latest.current;
@@ -146,7 +152,8 @@ export function useGameSession() {
     const r = completeQuest(s, localId);
     if (!r.ok) return emit({ kind: "error", message: r.reason });
     commit(r.session);
-    emit({ kind: "xp", xp: r.award.totalXp, title, levelUp: r.levelUp?.to ?? null });
+    const quest = s.quests.find(e => e.quest.local_id === localId)!.quest;
+    emit({ kind: "xp", xp: r.award.totalXp, title, rationale: quest.rationale, levelUp: r.levelUp?.to ?? null });
     cloud.enqueue(questOp(dayKey(new Date()), localId, title, r.award));
   }, [commit, emit, cloud]);
 
@@ -172,7 +179,7 @@ export function useGameSession() {
     const r = unlockNode(s.player, id);
     if (!r.ok) return emit({ kind: "error", message: r.reason });
     commit({ ...s, player: r.player });
-    emit({ kind: "info", title: `Unlocked ${NODES.get(id)!.name}` });
+    emit({ kind: "info", title: msg("toast.unlocked", { node: nodeName(id) }) });
     cloud.enqueue(nodeOp(id));
   }, [commit, emit, cloud]);
 

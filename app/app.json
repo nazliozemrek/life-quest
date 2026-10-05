@@ -31,7 +31,8 @@
         {
           "locationWhenInUsePermission": "Life Quest reveals the map where you walk and checks you in at quest locations."
         }
-      ]
+      ],
+      "expo-localization"
     ],
     "backgroundColor": "#0B0E14"
   }

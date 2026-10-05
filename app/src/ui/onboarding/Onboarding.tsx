@@ -1,11 +1,8 @@
 // Character creation (pillar 4 flow A–H). One question per card, every Life Load card skippable,
 // health and money behind a consent card, then the difficulty reveal and the starting-level fill.
-// Goals (E) and places (F) come later: they need the quest generator and real waypoints.
+// Goals (E) and places (F) sit between the backstory and the reveal.
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  Animated, Dimensions, Easing, Keyboard, LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
-  type KeyboardEvent,
-} from "react-native";
+import { Animated, Easing, Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   ACHIEVEMENTS, CLASSES, MODE_ORDER, backstoryXp, calibrate,
@@ -13,6 +10,10 @@ import {
 } from "../../../../src/onboarding/calibration";
 import { DIFFICULTY_MULT, playerLevels, skillLevels, type DifficultyMode, type SkillCode } from "../../../../src/xp/xp-engine";
 import { CREATION_QUEST, SKIPPED } from "../../game/onboarding";
+import type { Fix } from "../../../../src/spatial/spatial-engine";
+import type { Goal, Place } from "../../game/setup";
+import { Button, Chip, Choice, useKeyboardInset } from "./parts";
+import { GoalsStep, PlacesStep } from "./Setup";
 import { SKILLS } from "../../game/session";
 import { color, skillColor, skillLabel } from "../theme";
 
@@ -101,10 +102,14 @@ const MODE_LINE: Record<DifficultyMode, string> = {
 
 type Step =
   | { kind: "splash" } | { kind: "class" } | { kind: "card"; card: Card; n: number; of: number }
-  | { kind: "consent" } | { kind: "backstory" } | { kind: "reveal" } | { kind: "levelup" };
+  | { kind: "consent" } | { kind: "backstory" } | { kind: "goals" } | { kind: "places" } | { kind: "reveal" } | { kind: "levelup" };
 
-export function Onboarding({ onDone }: { onDone: (name: string, answers: A) => void }) {
+export function Onboarding({ onDone, explored, position }: {
+  onDone: (name: string, answers: A, goals: Goal[], places: Place[]) => void; explored: ReadonlySet<string>; position: Fix;
+}) {
   const [name, setName] = useState("");
+  const [goals, setGoals] = useState<Goal[]>([]);
+  const [places, setPlaces] = useState<Place[]>([]);
   const [answers, setAnswers] = useState<A>(SKIPPED);
   const [classPicked, setClassPicked] = useState(false);
   const [sensitive, setSensitive] = useState(true);
@@ -119,7 +124,7 @@ export function Onboarding({ onDone }: { onDone: (name: string, answers: A) => v
     const after = cardSteps.slice(LIFE_CARDS.length);
     return [
       { kind: "splash" }, { kind: "class" }, ...before, { kind: "consent" }, ...after,
-      { kind: "backstory" }, { kind: "reveal" }, { kind: "levelup" },
+      { kind: "backstory" }, { kind: "goals" }, { kind: "places" }, { kind: "reveal" }, { kind: "levelup" },
     ];
   }, [sensitive]);
 
@@ -154,8 +159,10 @@ export function Onboarding({ onDone }: { onDone: (name: string, answers: A) => v
         }} />
     ); break;
     case "backstory": body = <Backstory answers={answers} set={set} onNext={next} />; break;
+    case "goals": body = <GoalsStep goals={goals} setGoals={setGoals} onNext={next} />; break;
+    case "places": body = <PlacesStep places={places} setPlaces={setPlaces} explored={explored} position={position} onNext={next} />; break;
     case "reveal": body = <Reveal answers={answers} set={set} onNext={next} />; break;
-    case "levelup": body = <LevelUp answers={answers} onDone={() => onDone(name, answers)} />; break;
+    case "levelup": body = <LevelUp answers={answers} onDone={() => onDone(name, answers, goals, places)} />; break;
   }
 
   const skippable = step.kind === "card";
@@ -178,30 +185,6 @@ export function Onboarding({ onDone }: { onDone: (name: string, answers: A) => v
 }
 
 // ---------- Steps ----------
-
-/**
- * How much of the screen bottom the keyboard covers. Measured from the keyboard's top edge rather than its height,
- * so iOS 26's floating keyboard (inset from the screen edge) is cleared too. KeyboardAvoidingView missed it.
- */
-function useKeyboardInset(): number {
-  const [inset, setInset] = useState(0);
-  useEffect(() => {
-    const ios = Platform.OS === "ios";
-    const update = (e: KeyboardEvent) => {
-      if (ios) LayoutAnimation.configureNext(LayoutAnimation.create(e.duration || 250, "keyboard", "opacity"));
-      setInset(Math.max(0, Dimensions.get("screen").height - e.endCoordinates.screenY));
-    };
-    const hide = (e: KeyboardEvent) => {
-      if (ios) LayoutAnimation.configureNext(LayoutAnimation.create(e.duration || 250, "keyboard", "opacity"));
-      setInset(0);
-    };
-    const subs = ios
-      ? [Keyboard.addListener("keyboardWillChangeFrame", update), Keyboard.addListener("keyboardWillHide", hide)]
-      : [Keyboard.addListener("keyboardDidShow", update), Keyboard.addListener("keyboardDidHide", hide)];
-    return () => subs.forEach(x => x.remove());
-  }, []);
-  return inset;
-}
 
 function Splash({ name, setName, onNext }: { name: string; setName: (s: string) => void; onNext: () => void }) {
   const keyboard = useKeyboardInset();
@@ -437,25 +420,6 @@ function Pips({ n, of }: { n: number; of: number }) {
   );
 }
 
-function Choice({ label, sub, on, onPress }: { label: string; sub?: string; on: boolean; onPress: () => void }) {
-  return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityState={{ selected: on }}
-      style={({ pressed }) => [styles.choice, on && styles.choiceOn, pressed && styles.pressed]}>
-      <Text style={[styles.choiceLabel, on && styles.choiceLabelOn]}>{label}</Text>
-      {sub && <Text style={styles.choiceSub}>{sub}</Text>}
-    </Pressable>
-  );
-}
-
-function Chip({ label, on, tint = color.xp, onPress }: { label: string; on: boolean; tint?: string; onPress: () => void }) {
-  return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityState={{ selected: on }}
-      style={[styles.chip, on && { borderColor: tint, backgroundColor: `${tint}22` }]}>
-      <Text style={[styles.chipText, on && { color: color.text }]}>{label}</Text>
-    </Pressable>
-  );
-}
-
 function Stepper({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
   return (
     <View style={[styles.choice, styles.rowBetween]}>
@@ -470,15 +434,6 @@ function Stepper({ label, value, onChange }: { label: string; value: number; onC
         </Pressable>
       </View>
     </View>
-  );
-}
-
-function Button({ label, onPress, disabled, secondary }: { label: string; onPress: () => void; disabled?: boolean; secondary?: boolean }) {
-  return (
-    <Pressable onPress={onPress} disabled={disabled} accessibilityRole="button"
-      style={({ pressed }) => [styles.button, secondary && styles.buttonSecondary, disabled && styles.disabled, pressed && styles.pressed]}>
-      <Text style={[styles.buttonText, secondary && styles.buttonTextSecondary]}>{label}</Text>
-    </Pressable>
   );
 }
 

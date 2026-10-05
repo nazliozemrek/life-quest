@@ -3,7 +3,7 @@
 // player's only copy of their progress, so restore() never throws: anything it can't read starts fresh.
 import { accrueRested, playerLevels, type SkillCode } from "../../../src/xp/xp-engine";
 import type { Fix } from "../../../src/spatial/spatial-engine";
-import { SKILLS, type Player, type QuestEntry, type Session } from "./session";
+import { SKILLS, type Player, type QuestEntry, type Session, type Waypoint } from "./session";
 
 export const SAVE_KEY = "life-quest/session";
 const VERSION = 1;
@@ -16,6 +16,7 @@ export interface SavedGame {
   explored: string[];
   newCells: string[];
   position: Fix;
+  waypoints?: Waypoint[];      // the player's own places; absent in saves from before places existed
 }
 
 /** Local calendar day, so "today's quests" turn over at the player's midnight, not UTC's. */
@@ -33,6 +34,7 @@ export function serialize(s: Session, day: string): SavedGame {
   return {
     v: VERSION, day, player: s.player, quests: s.quests,
     explored: [...s.explored], newCells: [...s.newCells], position: s.position,
+    ...(s.player.profile?.setupDone ? { waypoints: s.waypoints } : {}),
   };
 }
 
@@ -62,6 +64,7 @@ export function restore(
     player: saved.player,
     explored: new Set(saved.explored),
     position: saved.position,
+    ...(saved.waypoints ? { waypoints: saved.waypoints } : {}),
   };
   // Same day, or the clock went backwards: resume as saved.
   if (gap <= 0) return { ...kept, quests: saved.quests, newCells: new Set(saved.newCells) };

@@ -1,27 +1,27 @@
-import { isRunningInExpoGo } from "expo";
 import { cellToLatLng } from "h3-js";
-import { Suspense, lazy, useMemo, useState } from "react";
-import { Platform, StyleSheet, Text, View } from "react-native";
+import { useMemo, useState } from "react";
+import { StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { Quest } from "../../../src/quests/quest-generator";
 import { hud as toHud, previewAward, questGate } from "../game/session";
 import { HudHeader } from "./HudHeader";
 import { Onboarding } from "./onboarding/Onboarding";
-import { PlaceholderMap } from "./map/PlaceholderMap";
+import { SetupFlow } from "./onboarding/Setup";
+import { GameMap } from "./map/GameMap";
 import type { LatLng, MapViewProps } from "./map/types";
 import { QuestList, type QuestRowModel } from "./QuestList";
 import { color } from "./theme";
 import { Toast } from "./Toast";
 import { useGameSession } from "./useGameSession";
 
-const MapboxMap = lazy(() => import("./map/MapboxMap"));
-const USE_MAPBOX = !!process.env.EXPO_PUBLIC_MAPBOX_TOKEN && Platform.OS !== "web" && !isRunningInExpoGo();
 
 export function GameScreen() {
   const game = useGameSession();
   // Blank until the save is read, so a returning player never sees character creation flash past.
   if (!game.loaded) return <View style={styles.screen} />;
-  if (!game.session.player.profile) return <Onboarding onDone={game.begin} />;
+  const { profile } = game.session.player;
+  if (!profile) return <Onboarding onDone={game.begin} explored={game.session.explored} position={game.session.position} />;
+  if (!profile.setupDone) return <SetupFlow explored={game.session.explored} position={game.session.position} onDone={game.finishSetup} />;
   return <World game={game} />;
 }
 
@@ -73,11 +73,7 @@ function World({ game }: { game: ReturnType<typeof useGameSession> }) {
 
   return (
     <View style={styles.screen}>
-      {USE_MAPBOX ? (
-        <Suspense fallback={<View style={StyleSheet.absoluteFill} />}><MapboxMap {...mapProps} /></Suspense>
-      ) : (
-        <PlaceholderMap {...mapProps} />
-      )}
+      <GameMap {...mapProps} />
 
       <SafeAreaView edges={["top"]} pointerEvents="box-none">
         <HudHeader hud={hud} player={session.player} />

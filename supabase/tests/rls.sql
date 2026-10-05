@@ -33,6 +33,14 @@ insert into player_explored_cells (cell, district) values ('8a1ec902e117fff', '8
 on conflict do nothing;
 insert into daily_quest_sets (day, quests) values ('2026-10-05', '[]');
 
+-- Goals: the app replaces the whole list (delete, then insert).
+insert into player_goals (id, title, horizon, skill) values ('g1', 'Run a 5K', 'month', 'vitality'), ('g2', 'Write a novel', 'year', null);
+delete from player_goals where id like '%';
+insert into player_goals (id, title, horizon, skill) values ('g3', 'Learn to code', 'week', 'craft');
+do $$ begin
+  assert (select string_agg(title, ',') from player_goals) = 'Learn to code', 'goals replaced';
+end $$;
+
 -- The app re-sends its profile as an upsert (PostgREST on_conflict=id): updates the editable columns only.
 insert into players (handle, class, difficulty, rules_mode, timezone) values ('Kaan E', 'artisan', 'normal', 'hard', 'Europe/Istanbul')
 on conflict (id) do update set handle = excluded.handle, class = excluded.class, difficulty = excluded.difficulty,
@@ -62,6 +70,8 @@ do $$ begin
   assert (select count(*) from players) = 0, 'B sees A';
   assert (select count(*) from xp_ledger) = 0, 'B sees A''s ledger';
   assert (select count(*) from player_explored_cells) = 0, 'B sees A''s map';
+  assert (select count(*) from player_goals) = 0, 'B sees A''s goals';
+  delete from player_goals where id like '%';
   begin
     insert into xp_ledger (player_id, idempotency_key, source, final_xp, curve_version)
     values ('00000000-0000-0000-0000-00000000000a', 'evil', 'quest', 10, 1);
@@ -76,6 +86,11 @@ do $$ begin
   begin perform count(*) from players; raise exception 'anon could read players';
   exception when insufficient_privilege then null; end;
 end $$;
+
+-- B's delete above touched nothing of A's.
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', true);
+set local role authenticated;
+do $$ begin assert (select count(*) from player_goals) = 1, 'B deleted A''s goals'; end $$;
 
 rollback;
 \echo 'supabase rls tests passed'

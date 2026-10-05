@@ -6,9 +6,10 @@ import type { OnboardingAnswers } from "../../../src/onboarding/calibration";
 import { createSession } from "../game/mock-world";
 import { poolQuests } from "../game/context";
 import { CREATION_QUEST, startGame } from "../game/onboarding";
+import { applySetup, type Goal, type Place } from "../game/setup";
 import { SAVE_KEY, dayKey, restore, serialize } from "../game/persist";
 import { applyFixes, completeQuest, planWalk, spawnAt, type Session } from "../game/session";
-import { creationOps, profileOp, questOp } from "../net/outbox";
+import { creationOps, goalsOp, profileOp, questOp } from "../net/outbox";
 import { useCloudSync } from "../net/useCloudSync";
 import type { LatLng } from "./map/types";
 
@@ -34,6 +35,13 @@ function toFix(l: Location.LocationObject): Fix {
     altitudeM: l.coords.altitude ?? undefined,
     isMock: l.mocked === true,       // Android only; iOS doesn't report spoofed fixes
   };
+}
+
+/** Goals and places change which quests fit, so today's set is re-picked, unless the player already started on it. */
+function withSetup(s: Session, goals: Goal[], places: Place[]): Session {
+  const next = applySetup(s, goals, places);
+  if (next.quests.some(e => e.status === "done")) return next;
+  return { ...next, quests: poolQuests(next, dayKey(new Date())) };
 }
 
 export function useGameSession() {
@@ -142,13 +150,20 @@ export function useGameSession() {
   }, [commit, emit, cloud]);
 
   /** Finish character creation: the new player replaces the seed one, and the tutorial quest pays out. */
-  const begin = useCallback((name: string, answers: OnboardingAnswers) => {
+  const begin = useCallback((name: string, answers: OnboardingAnswers, goals: Goal[], places: Place[]) => {
     const r = startGame(latest.current, name, answers);
-    commit(r.session);
+    const s = withSetup(r.session, goals, places);
+    commit(s);
     emit({ kind: "xp", xp: CREATION_QUEST.xp, title: CREATION_QUEST.title, levelUp: r.levelUp?.to ?? null });
     cloud.markCreated();
-    cloud.enqueue(profileOp(r.session.player), ...creationOps(r.calibration, CREATION_QUEST.xp));
+    cloud.enqueue(profileOp(r.session.player), ...creationOps(r.calibration, CREATION_QUEST.xp), goalsOp(goals));
   }, [commit, emit, cloud]);
 
-  return { session, loaded, event, mode, walkTo, complete, begin };
+  /** Goals and places for a character made before they existed. Places never leave the phone. */
+  const finishSetup = useCallback((goals: Goal[], places: Place[]) => {
+    commit(withSetup(latest.current, goals, places));
+    cloud.enqueue(goalsOp(goals));
+  }, [commit, cloud]);
+
+  return { session, loaded, event, mode, walkTo, complete, begin, finishSetup };
 }

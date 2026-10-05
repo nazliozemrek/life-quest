@@ -19,7 +19,24 @@ describe("quest pool", () => {
     const quests = POOL.map((p, i) => toQuest(p, `q${i + 1}`, 1));
     const batch = { quests };
     for (let i = 0; i < quests.length; i += 8) QuestBatchSchema.parse({ quests: quests.slice(i, i + 8) });
-    expect(validateBatch(batch, { ...ctx, request: { kind: "on_demand", count: quests.length } }).issues).toEqual([]);
+    const places = [{ id: "wp_home", kind: "home", name: "Home" }, { id: "wp_work", kind: "work", name: "Work" }, { id: "wp_gym", kind: "gym", name: "Gym" }];
+    expect(validateBatch(batch, { ...ctx, waypoints: places, request: { kind: "on_demand", count: quests.length } }).issues).toEqual([]);
+  });
+
+  it("offers quests at the player's places only when they pinned them", () => {
+    const placeTitles = new Set(POOL.filter(p => p.place).map(p => p.title));
+    for (let d = 1; d <= 9; d++) {
+      expect(pickDailySet(ctx, `day${d}`).some(q => placeTitles.has(q.title))).toBe(false);
+    }
+    const withGym = { ...ctx, waypoints: [{ id: "wp_gym", kind: "gym", name: "Gym" }] };
+    const days = Array.from({ length: 9 }, (_, d) => pickDailySet(withGym, `day${d}`));
+    expect(days.filter(set => set.some(q => q.location.ref === "wp_gym")).length).toBeGreaterThan(4);
+    for (const set of days) expect(validateBatch({ quests: set }, withGym).issues).toEqual([]);
+  });
+
+  it("puts the skills behind the player's goals first", () => {
+    const set = pickDailySet(ctx, "s", 6, { focusSkills: ["charisma"] });
+    expect(set[0].skill_weights[0].skill).toBe("charisma");
   });
 
   it("picks a valid daily set: rustiest skill first, one standard at most, exploration toward the frontier", () => {

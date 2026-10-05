@@ -11,6 +11,7 @@ import {
 } from "../../../src/spatial/spatial-engine";
 import type { Quest } from "../../../src/quests/quest-generator";
 import { CLASSES, type ClassCode, type OnboardingAnswers } from "../../../src/onboarding/calibration";
+import type { Goal } from "./setup";
 
 export const SKILLS: readonly SkillCode[] = ["vitality", "craft", "wealth", "charisma", "mindset"];
 
@@ -30,6 +31,8 @@ export interface Profile {
   targetEffort: number;
   answers: OnboardingAnswers;        // device only, so recalibration can re-open them; the server gets derived values
   createdAt: number;
+  goals?: Goal[];                    // 1-3 main quests the player picked
+  setupDone?: boolean;               // goals and places screens seen; characters made before they existed get them once
 }
 
 export interface Player {

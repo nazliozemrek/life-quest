@@ -6,11 +6,13 @@ import { CURVE_VERSION } from "../../../src/xp/xp-engine";
 import { districtOf } from "../../../src/spatial/spatial-engine";
 import type { Calibration } from "../game/onboarding";
 import type { Player } from "../game/session";
+import type { Goal } from "../game/setup";
 
 export type SyncOp =
   | { op: "profile"; player: Pick<Player, "name" | "difficulty"> & { profile: NonNullable<Player["profile"]> } }
   | { op: "xp"; key: string; source: "quest" | "backstory" | "creation"; title: string | null; xp: number;
-      split: Record<string, number>; rested: number; multipliers: Record<string, number> };
+      split: Record<string, number>; rested: number; multipliers: Record<string, number> }
+  | { op: "goals"; goals: Goal[] };
 
 export function profileOp(p: Player): SyncOp | null {
   return p.profile ? { op: "profile", player: { name: p.name, difficulty: p.difficulty, profile: p.profile } } : null;
@@ -33,11 +35,17 @@ export function creationOps(c: Calibration, creationXp: number): SyncOp[] {
   ];
 }
 
+/** The player's whole goal list, replacing what the server has. */
+export function goalsOp(goals: Goal[]): SyncOp {
+  return { op: "goals", goals: goals.map(({ id, title, horizon, skill }) => ({ id, title, horizon, skill })) };
+}
+
 /** The slice of the Supabase client the flush uses, so tests can pass a recorder. */
 export interface Db {
   from(table: string): {
     upsert(rows: object | object[], opts?: { onConflict?: string; ignoreDuplicates?: boolean }): PromiseLike<{ error: unknown }>;
     insert(rows: object | object[]): PromiseLike<{ error: unknown }>;
+    delete(): { like(column: string, pattern: string): PromiseLike<{ error: unknown }> };
   };
 }
 
@@ -54,7 +62,7 @@ export async function flush(
   let i = 0;
   for (; i < ops.length; i++) {
     const o = ops[i];
-    const { error } = o.op === "profile" ? await sendProfile(db, o) : await db.from("xp_ledger").upsert({
+    const { error } = o.op === "profile" ? await sendProfile(db, o) : o.op === "goals" ? await sendGoals(db, o.goals) : await db.from("xp_ledger").upsert({
       idempotency_key: o.key, source: o.source, title: o.title, final_xp: o.xp, skill_split: o.split,
       rested_consumed: o.rested, multipliers: o.multipliers, curve_version: CURVE_VERSION,
     }, { onConflict: "player_id,idempotency_key", ignoreDuplicates: true });
@@ -86,4 +94,12 @@ async function sendProfile(db: Db, o: Extract<SyncOp, { op: "profile" }>): Promi
     version: pr.calibrationVersion, trigger: "onboarding", life_load: pr.lifeLoad, calibrated_mode: pr.calibratedMode,
     rules_mode: pr.rulesMode, xp_mode: o.player.difficulty, constraint_tags: pr.constraints, target_effort: pr.targetEffort,
   });
+}
+
+/** Delete then insert: not atomic, but a failure leaves the op queued and the retry ends in the same state. */
+async function sendGoals(db: Db, goals: Goal[]): Promise<{ error: unknown }> {
+  // Supabase refuses a DELETE with no filter; every id matches '%', and RLS keeps it to this player's rows.
+  const del = await db.from("player_goals").delete().like("id", "%");
+  if (del.error || !goals.length) return del;
+  return db.from("player_goals").insert(goals);
 }

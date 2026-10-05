@@ -3,7 +3,7 @@ import { calibrate } from "../../src/onboarding/calibration";
 import { createSession } from "../src/game/mock-world";
 import { SKIPPED, startGame } from "../src/game/onboarding";
 import { completeQuest } from "../src/game/session";
-import { creationOps, flush, profileOp, questOp, type Db } from "../src/net/outbox";
+import { creationOps, flush, goalsOp, profileOp, questOp, type Db } from "../src/net/outbox";
 
 const NOW = Date.UTC(2026, 9, 5, 7, 0);
 
@@ -15,6 +15,7 @@ function recorder(failOn?: string) {
     from: table => ({
       upsert: async rows => { calls.push({ table, kind: "upsert", rows }); if (fail === table) { fail = undefined; return { error: "down" }; } return { error: null }; },
       insert: async rows => { calls.push({ table, kind: "insert", rows }); if (fail === table) { fail = undefined; return { error: "down" }; } return { error: null }; },
+      delete: () => ({ like: async (column, pattern) => { calls.push({ table, kind: "delete", rows: { column, pattern } }); return { error: null }; } }),
     }),
   };
   return { db, calls };
@@ -59,5 +60,14 @@ describe("sync outbox", () => {
     const { db, calls } = recorder();
     await flush(db, [], s.explored, seen);
     expect(calls[0].rows).toHaveLength(s.explored.size - 5);
+  });
+
+  it("replaces the goal list: delete, then insert", async () => {
+    const goals = [{ id: "g1", title: "Run a 5K", horizon: "month" as const, skill: "vitality" as const }];
+    const { db, calls } = recorder();
+    const r = await flush(db, [goalsOp(goals), goalsOp([])], new Set(), new Set());
+    expect(r.remaining).toEqual([]);
+    expect(calls.map(c => `${c.kind}:${c.table}`)).toEqual(["delete:player_goals", "insert:player_goals", "delete:player_goals"]);
+    expect(calls[1].rows).toEqual(goals);
   });
 });

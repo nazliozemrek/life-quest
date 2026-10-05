@@ -18,6 +18,7 @@ export interface PoolQuest {
   minutes: number;
   bestTime: Quest["window"]["best_time"];
   tags?: Tag[];
+  place?: "home" | "work" | "gym";      // only offered when the player has pinned this place; points at wp_<place>
 }
 
 const check = { type: "checkbox", target: null, unit: null } as const;
@@ -41,6 +42,13 @@ export const POOL: PoolQuest[] = [
   { id: "vit.veg", skill: "vitality", tier: "trivial", title: "Forage Something Green", flavor: "Rations matter.",
     objective: "Eat a portion of vegetables or fruit with one meal.", success: check, minutes: 5, bestTime: "midday" },
 
+  { id: "vit.gym45", skill: "vitality", tier: "standard", place: "gym", title: "Raid Your Gym", flavor: "The iron remembers who shows up.",
+    objective: "Train at your gym for 45 minutes.", success: { type: "geofence_dwell", target: 45, unit: "min" }, minutes: 50,
+    bestTime: "any", tags: ["physical", "intense"] },
+  { id: "vit.gym20", skill: "vitality", tier: "minor", place: "gym", title: "Quick Strike at the Gym", flavor: "Twenty minutes still counts.",
+    objective: "Get to your gym and train for at least 20 minutes.", success: { type: "geofence_dwell", target: 20, unit: "min" },
+    minutes: 25, bestTime: "any", tags: ["physical"] },
+
   // Craft
   { id: "crf.focus25", skill: "craft", second: "mindset", tier: "standard", title: "Forge 25 Minutes of Deep Work", flavor: "The anvil rewards the patient.",
     objective: "Work on your main project for 25 minutes with notifications off.", success: mins(25), minutes: 25, bestTime: "morning" },
@@ -52,6 +60,9 @@ export const POOL: PoolQuest[] = [
     objective: "Spend 30 minutes making something: draw, cook a new dish, build, write or code.", success: mins(30), minutes: 30, bestTime: "evening" },
   { id: "crf.ship", skill: "craft", tier: "minor", title: "Show the Guild Your Work", flavor: "A blade in a drawer cuts nothing.",
     objective: "Share one thing you made with someone and ask for feedback.", success: check, minutes: 10, bestTime: "any", tags: ["social"] },
+  { id: "crf.workfirst", skill: "craft", second: "wealth", tier: "minor", place: "work", title: "Strike First at the Guild Hall",
+    flavor: "The hardest task falls easiest before the noise starts.",
+    objective: "At work, do your hardest task for 30 minutes before opening messages.", success: check, minutes: 30, bestTime: "morning" },
   { id: "crf.desk", skill: "craft", tier: "trivial", title: "Clear the Workbench", flavor: "A clean bench is a fast bench.",
     objective: "Tidy your desk or workspace for 5 minutes.", success: mins(5), minutes: 5, bestTime: "any" },
 
@@ -138,8 +149,8 @@ export function toQuest(p: PoolQuest, localId: string, effort: number): Quest {
     local_id: localId, kind: "daily", title: p.title, flavor_text: p.flavor, objective: p.objective, success: p.success,
     tier: p.tier, effort,
     skill_weights: p.second ? [{ skill: p.skill, weight: 0.7 }, { skill: p.second, weight: 0.3 }] : [{ skill: p.skill, weight: 1 }],
-    verification: p.success.type === "duration_minutes" ? "sensor" : "self",
-    location: { type: "none", ref: null },
+    verification: p.success.type === "duration_minutes" || p.success.type === "geofence_dwell" ? "sensor" : "self",
+    location: p.place ? { type: "waypoint", ref: `wp_${p.place}` } : { type: "none", ref: null },
     window: { due_in_hours: 24, best_time: p.bestTime }, estimated_minutes: p.minutes, prerequisites: [], chain: null,
     rationale: `pool:${p.id}`,
   };
@@ -150,10 +161,10 @@ export function toQuest(p: PoolQuest, localId: string, effort: number): Quest {
  * when the player has a frontier. At most one standard-tier quest, like a generated set.
  */
 export function pickDailySet(
-  ctx: Pick<PlayerContext, "skills" | "constraints" | "recentQuestTitles" | "frontierDistricts" | "targetEffort">,
+  ctx: Pick<PlayerContext, "skills" | "constraints" | "recentQuestTitles" | "frontierDistricts" | "targetEffort" | "waypoints">,
   seed: string,
   count = 6,
-  opts: { exclude?: string[]; idPrefix?: string } = {},
+  opts: { exclude?: string[]; idPrefix?: string; focusSkills?: Skill[] } = {},
 ): Quest[] {
   const rand = rng(seed);
   const norm = (t: string) => t.toLocaleLowerCase().trim();
@@ -165,12 +176,18 @@ export function pickDailySet(
   const frontier = ctx.frontierDistricts[0];
   const slots = frontier && !taken.has(norm("Scout the Uncharted Streets")) ? count - 1 : count;
 
+  const places = new Set(ctx.waypoints.map(w => w.id));
   const candidates = POOL.filter(p => !excluded(p, ctx.constraints) && !taken.has(norm(p.title)))
-    .map(p => ({ p, r: rand() }))
+    .filter(p => !p.place || places.has(`wp_${p.place}`))
+    // Quests at the player's own places are what make the map theirs: they usually win their skill's slot.
+    .map(p => ({ p, r: rand() - (p.place ? 0.5 : 0) }))
     .sort((a, b) => a.r - b.r)
     .map(x => x.p);
 
-  const skills = (Object.keys(ctx.skills) as Skill[]).sort((a, b) => ctx.skills[a].form - ctx.skills[b].form);
+  // Skills behind the player's goals first, then the rustiest.
+  const focus = new Set(opts.focusSkills ?? []);
+  const skills = (Object.keys(ctx.skills) as Skill[])
+    .sort((a, b) => Number(focus.has(b)) - Number(focus.has(a)) || ctx.skills[a].form - ctx.skills[b].form);
   let standards = 0;
   const take = (p: PoolQuest) => {
     if (p.tier === "standard" && standards >= 1) return false;

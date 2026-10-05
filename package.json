@@ -1,0 +1,25 @@
+{
+  "name": "life-quest",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Life Quest: turn real life into an open-world RPG. Core engines: XP economy, spatial fog of war, AI quest generation, onboarding calibration.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "db:test": "bash db/run-migrations.sh && psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -q -f db/tests/smoke.sql"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
+    "h3-js": "^4.5.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
+  }
+}

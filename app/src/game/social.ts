@@ -184,3 +184,14 @@ function rng(seed: number) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
+
+// ---------- The red dot ----------
+
+/** Cards from others that arrived since the player last opened Around You, and the newest one as a teaser. */
+export function unseen(items: FeedItem[], lastSeen: number): { count: number; peek: FeedItem | null } {
+  const fresh = items.filter(i => !i.mine && Number(i.id) > lastSeen);
+  return { count: fresh.length, peek: fresh[0] ?? null };
+}
+
+/** "3", or "9+" when the dot would get crowded. */
+export const badgeText = (n: number) => (n > 9 ? "9+" : String(n));

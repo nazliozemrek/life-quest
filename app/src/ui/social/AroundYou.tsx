@@ -29,7 +29,7 @@ const MODE_COLOR: Record<DifficultyMode, string> = {
   peaceful: color.good, normal: color.textDim, hard: "#F5A524", hardcore: "#F2555A",
 };
 
-export function AroundYou({ session, onClose }: { session: Session; onClose(): void }) {
+export function AroundYou({ session, onClose, onSeen }: { session: Session; onClose(): void; onSeen?(topId: string | null): void }) {
   const t = useT();
   const [me, setMe] = useState<MyProfile | null | undefined>(undefined);
   const [loading, setLoading] = useState(true);
@@ -41,6 +41,7 @@ export function AroundYou({ session, onClose }: { session: Session; onClose(): v
     setLoading(false);
   }, []);
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { onSeen?.(null); }, [onSeen]);
 
   // Keep what others see in step with the game: the region (at most daily) and the worn title.
   const position = session.position;
@@ -78,7 +79,7 @@ export function AroundYou({ session, onClose }: { session: Session; onClose(): v
       <OptIn session={session} current={me} editing={editing}
         onSaved={p => { setMe(p); setEditing(false); }} onCancel={editing ? () => setEditing(false) : undefined} />
     );
-  } else body = <Feed />;
+  } else body = <Feed onSeen={onSeen} />;
 
   return (
     <SafeAreaView style={styles.screen} edges={["top", "bottom"]}>
@@ -188,7 +189,7 @@ function avatarChoices(seed: number, keep?: Avatar): Avatar[] {
 
 // ---------- Feed ----------
 
-function Feed() {
+function Feed({ onSeen }: { onSeen?(topId: string | null): void }) {
   const t = useT();
   const [items, setItems] = useState<FeedItem[]>([]);
   const [scope, setScope] = useState<FeedScope>("peers");
@@ -206,8 +207,9 @@ function Feed() {
     setScope(page.scope);
     setMore(page.items.length >= PAGE);
     top.current = page.items[0]?.id ?? null;
+    onSeen?.(top.current);
     setState("ready");
-  }, []);
+  }, [onSeen]);
 
   useEffect(() => { reload(); }, [reload]);
 
@@ -217,10 +219,11 @@ function Feed() {
       const page = await fetchFeed(top.current ? { after: top.current } : {});
       if (!page?.items.length) return;
       top.current = page.items[0].id;
+      onSeen?.(top.current);
       setItems(old => [...page.items, ...old.filter(o => !page.items.some(n => n.id === o.id))]);
     }, REFRESH_MS);
     return () => clearInterval(id);
-  }, []);
+  }, [onSeen]);
 
   useEffect(() => {
     if (!notice) return;

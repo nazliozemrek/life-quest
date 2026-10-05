@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { createSession } from "../src/game/mock-world";
 import {
   FEED_NODES, avatarPixels, creditRespect, feedLine, parseFeed, regionOf, suggestUsername, timeAgo, titleNodeId,
-  titleOf, usernameProblem,
+  titleOf, unseen, badgeText, usernameProblem,
 } from "../src/game/social";
 import { translate } from "../src/i18n";
 
@@ -86,5 +86,15 @@ describe("respect", () => {
     const once = creditRespect(p, { lastId: 7, count: 3, restedXp: 15 });
     expect(once.rested).toBe(p.rested + 15);
     expect(creditRespect(once, { lastId: 7, count: 3, restedXp: 15 })).toBe(once);
+  });
+});
+
+describe("red dot", () => {
+  it("counts only others' cards newer than the last look", () => {
+    const item = (id: string, mine = false) => ({ id, mine } as Parameters<typeof unseen>[0][number]);
+    const u = unseen([item("9"), item("8", true), item("7"), item("5")], 6);
+    expect(u.count).toBe(2);
+    expect(u.peek?.id).toBe("9");
+    expect(badgeText(12)).toBe("9+");
   });
 });

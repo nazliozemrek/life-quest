@@ -1,6 +1,6 @@
 import { cellToLatLng } from "h3-js";
 import { useMemo, useState } from "react";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Modal, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { Quest } from "../../../src/quests/quest-generator";
 import { isPinnedPlace, hud as toHud, previewAward, questGate } from "../game/session";
@@ -23,6 +23,8 @@ import { useGameSession } from "./useGameSession";
 import { useReminders } from "./useReminders";
 import { useT } from "./settings";
 import { AroundYou } from "./social/AroundYou";
+import { AroundYouButton } from "./social/AroundYouButton";
+import { useAroundYouBadge } from "./social/useAroundYouBadge";
 
 
 export function GameScreen() {
@@ -55,6 +57,7 @@ function World({ game }: { game: ReturnType<typeof useGameSession> }) {
   const [focused, setFocused] = useState<Quest | null>(null);
   const [sheet, setSheet] = useState(false);
   const [social, setSocial] = useState(false);
+  const badge = useAroundYouBadge(ACCOUNTS_ENABLED);
   const t = useT();
   useReminders(session);
   const unlockable = useMemo(() => availableCount(session.player), [session.player]);
@@ -123,14 +126,7 @@ function World({ game }: { game: ReturnType<typeof useGameSession> }) {
             <Text style={styles.hint} numberOfLines={1}>{t(mode === "gps" ? "hud.gps" : "hud.tapToWalk")}</Text>
           )}
         </View>
-        {ACCOUNTS_ENABLED && (
-          <View style={styles.socialRow} pointerEvents="box-none">
-            <Pressable onPress={() => setSocial(true)} accessibilityRole="button" hitSlop={6}
-              style={({ pressed }) => [styles.socialChip, pressed && { opacity: 0.7 }]}>
-              <Text style={styles.socialText}>{t("social.open")}</Text>
-            </Pressable>
-          </View>
-        )}
+        {ACCOUNTS_ENABLED && <AroundYouButton badge={badge} onPress={() => setSocial(true)} />}
       </SafeAreaView>
 
       <View style={styles.sheet} pointerEvents="box-none">
@@ -152,7 +148,7 @@ function World({ game }: { game: ReturnType<typeof useGameSession> }) {
       </Modal>
 
       <Modal visible={social} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setSocial(false)}>
-        <AroundYou session={session} onClose={() => setSocial(false)} />
+        <AroundYou session={session} onClose={() => setSocial(false)} onSeen={badge.markSeen} />
       </Modal>
     </View>
   );
@@ -171,11 +167,5 @@ const styles = StyleSheet.create({
     color: color.textDim, fontSize: 11, marginLeft: 8, flexShrink: 0, overflow: "hidden",
     paddingVertical: 4, paddingHorizontal: 8, borderRadius: 999, backgroundColor: color.panel,
   },
-  socialRow: { marginTop: 8, marginHorizontal: 12, flexDirection: "row", justifyContent: "flex-end" },
-  socialChip: {
-    paddingVertical: 6, paddingHorizontal: 12, borderRadius: 999, backgroundColor: color.panel,
-    borderWidth: 1, borderColor: "rgba(245,196,81,0.45)",
-  },
-  socialText: { color: color.xp, fontSize: 12, fontWeight: "700" },
   sheet: { position: "absolute", left: 0, right: 0, bottom: 0, top: 0, justifyContent: "flex-end" },
 });

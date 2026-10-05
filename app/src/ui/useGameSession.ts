@@ -188,5 +188,12 @@ export function useGameSession() {
     commit({ ...s, player: { ...s.player, title: title ?? undefined } });
   }, [commit]);
 
-  return { session, loaded, event, mode, walkTo, complete, begin, finishSetup, unlock, setTitle };
+  /** Replace this phone's game with one restored from the cloud. */
+  const adoptRestored = useCallback((restored: Session, cells: string[]) => {
+    commit(restored);
+    cloud.adopt(cells);
+    emit({ kind: "info", title: msg("account.restored", { name: restored.player.name }) });
+  }, [commit, cloud, emit]);
+
+  return { session, loaded, event, mode, walkTo, complete, begin, finishSetup, unlock, setTitle, adoptRestored };
 }

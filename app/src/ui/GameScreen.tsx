@@ -9,6 +9,11 @@ import { HudHeader } from "./HudHeader";
 import { Profile } from "./profile/Profile";
 import { Onboarding } from "./onboarding/Onboarding";
 import { SetupFlow } from "./onboarding/Setup";
+import { ACCOUNTS_ENABLED, RestoreFlow } from "./account/Account";
+import { fromCloud } from "../game/cloudsave";
+import { createSession } from "../game/mock-world";
+import { poolQuests } from "../game/context";
+import { dayKey } from "../game/persist";
 import { GameMap } from "./map/GameMap";
 import type { LatLng, MapViewProps } from "./map/types";
 import { QuestList, type QuestRowModel } from "./QuestList";
@@ -21,10 +26,25 @@ import { useT } from "./settings";
 
 export function GameScreen() {
   const game = useGameSession();
+  const [restoring, setRestoring] = useState(false);
   // Blank until the save is read, so a returning player never sees character creation flash past.
   if (!game.loaded) return <View style={styles.screen} />;
   const { profile } = game.session.player;
-  if (!profile) return <Onboarding onDone={game.begin} explored={game.session.explored} position={game.session.position} />;
+  if (!profile && restoring) {
+    return (
+      <RestoreFlow onCancel={() => setRestoring(false)}
+        onRestored={(save, cells) => {
+          game.adoptRestored(fromCloud(save, cells, dayKey(new Date()), createSession, poolQuests), cells);
+          setRestoring(false);
+        }} />
+    );
+  }
+  if (!profile) {
+    return (
+      <Onboarding onDone={game.begin} explored={game.session.explored} position={game.session.position}
+        onRestore={ACCOUNTS_ENABLED ? () => setRestoring(true) : undefined} />
+    );
+  }
   if (!profile.setupDone) return <SetupFlow explored={game.session.explored} position={game.session.position} onDone={game.finishSetup} />;
   return <World game={game} />;
 }

@@ -11,6 +11,7 @@ import {
   NODES, TREES, canUnlock, nodeState, points, titles, xpBonus, type SkillNode,
 } from "../../game/skilltree";
 import { SetupFlow } from "../onboarding/Setup";
+import { ACCOUNTS_ENABLED, BackupBox } from "../account/Account";
 import { color, skillColor } from "../theme";
 import { useSettings, useT } from "../settings";
 import { say } from "../../i18n";
@@ -113,6 +114,12 @@ export function Profile({ session, onClose, onUnlock, onTitle, onEditSetup }: Pr
           </View>
           <Tree player={p} skill={tab} picked={picked} onPick={setPicked} />
         </Section>
+        {ACCOUNTS_ENABLED && (
+          <Section title={t("account.title")}>
+            <BackupBox />
+          </Section>
+        )}
+
         <Section title={t("profile.settings")}>
           <Text style={styles.settingLabel}>{t("profile.language")}</Text>
           <View style={styles.wrap}>

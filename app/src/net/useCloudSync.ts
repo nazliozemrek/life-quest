@@ -11,11 +11,12 @@ import { dayKey } from "../game/persist";
 import type { Session } from "../game/session";
 import { creationOps, flush, profileOp, type Db, type SyncOp } from "./outbox";
 import { ensureSignedIn, supabase } from "./supabase";
+import { cloudSave } from "../game/cloudsave";
 
 const SYNC_KEY = "life-quest/sync";
 const FLUSH_DEBOUNCE_MS = 3000;
 
-interface SyncState { ops: SyncOp[]; synced: string[]; bootstrapped: boolean }
+interface SyncState { ops: SyncOp[]; synced: string[]; bootstrapped: boolean; savedHash?: string }
 
 export function useCloudSync(
   loaded: boolean, session: Session, latest: MutableRefObject<Session>, commit: (s: Session) => void,
@@ -38,6 +39,7 @@ export function useCloudSync(
       // Ops queued while the flush was in flight sit after the ones it saw.
       state.current = { ...st, ops: [...r.remaining, ...state.current!.ops.slice(before)], synced: [...r.synced] };
       save();
+      if (!r.remaining.length) await uploadSave();
       await fetchQuests();
     } catch {
       // Network gone mid-flush: everything left is still queued.
@@ -45,6 +47,18 @@ export function useCloudSync(
       flushing.current = false;
     }
   }, [latest]);
+
+  /** The cloud copy of the save, for restoring on another phone. Only sent when it changed. */
+  const uploadSave = async () => {
+    const st = state.current;
+    if (!supabase || !st) return;
+    const body = cloudSave(latest.current, dayKey(new Date()));
+    const json = JSON.stringify(body);
+    const hash = `${json.length}:${hashString(json)}`;
+    if (st.savedHash === hash) return;
+    const { error } = await supabase.from("player_saves").upsert({ save: body, updated_at: new Date().toISOString() }, { onConflict: "player_id" });
+    if (!error) { state.current = { ...state.current!, savedHash: hash }; save(); }
+  };
 
   /** Today's set from the server: AI-written when the backend has an API key. Replaces the pool set only if
    *  nothing has been completed yet, so quest ids never change under a finished quest. */
@@ -111,5 +125,18 @@ export function useCloudSync(
     if (state.current) state.current = { ...state.current, bootstrapped: true };
   }, []);
 
-  return useMemo(() => ({ enqueue, markCreated }), [enqueue, markCreated]);
+  /** After a restore: the server already has everything, including these fog cells. */
+  const adopt = useCallback((cells: string[]) => {
+    state.current = { ops: [], synced: cells, bootstrapped: true };
+    save();
+  }, []);
+
+  return useMemo(() => ({ enqueue, markCreated, adopt }), [enqueue, markCreated, adopt]);
+}
+
+/** FNV-1a, enough to tell "the save changed" without keeping a copy. */
+function hashString(s: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+  return (h >>> 0).toString(36);
 }

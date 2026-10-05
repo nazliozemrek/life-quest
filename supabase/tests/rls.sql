@@ -52,6 +52,13 @@ do $$ begin
   exception when check_violation then null; end;
 end $$;
 
+-- Cloud save: one row per player, upserted.
+insert into player_saves (save) values ('{"v": 1}') on conflict (player_id) do update set save = excluded.save, updated_at = now();
+insert into player_saves (save) values ('{"v": 2}') on conflict (player_id) do update set save = excluded.save, updated_at = now();
+do $$ begin
+  assert (select save->>'v' from player_saves) = '2', 'save upserted';
+end $$;
+
 -- The app re-sends its profile as an upsert (PostgREST on_conflict=id): updates the editable columns only.
 insert into players (handle, class, difficulty, rules_mode, timezone) values ('Kaan E', 'artisan', 'normal', 'hard', 'Europe/Istanbul')
 on conflict (id) do update set handle = excluded.handle, class = excluded.class, difficulty = excluded.difficulty,
@@ -83,6 +90,7 @@ do $$ begin
   assert (select count(*) from player_explored_cells) = 0, 'B sees A''s map';
   assert (select count(*) from player_goals) = 0, 'B sees A''s goals';
   assert (select count(*) from player_skill_nodes) = 0, 'B sees A''s nodes';
+  assert (select count(*) from player_saves) = 0, 'B sees A''s save';
   delete from player_goals where id like '%';
   begin
     insert into xp_ledger (player_id, idempotency_key, source, final_xp, curve_version)

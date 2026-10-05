@@ -155,8 +155,9 @@ type Step =
   | { kind: "splash" } | { kind: "class" } | { kind: "card"; card: Card; n: number; of: number }
   | { kind: "consent" } | { kind: "backstory" } | { kind: "goals" } | { kind: "places" } | { kind: "reveal" } | { kind: "levelup" };
 
-export function Onboarding({ onDone, explored, position }: {
+export function Onboarding({ onDone, onRestore, explored, position }: {
   onDone: (name: string, answers: A, goals: Goal[], places: Place[]) => void; explored: ReadonlySet<string>; position: Fix;
+  onRestore?: () => void;          // "I already have a character": only when the build can reach the backend
 }) {
   const [name, setName] = useState("");
   const [goals, setGoals] = useState<Goal[]>([]);
@@ -187,7 +188,7 @@ export function Onboarding({ onDone, explored, position }: {
 
   let body: React.ReactNode;
   switch (step.kind) {
-    case "splash": body = <Splash name={name} setName={setName} onNext={next} />; break;
+    case "splash": body = <Splash name={name} setName={setName} onNext={next} onRestore={onRestore} />; break;
     case "class": body = (
       <ClassSelect value={classPicked ? answers.focusClass : null}
         onPick={c => { set(a => ({ ...a, focusClass: c })); setClassPicked(true); next(); }} />
@@ -238,7 +239,7 @@ export function Onboarding({ onDone, explored, position }: {
 
 // ---------- Steps ----------
 
-function Splash({ name, setName, onNext }: { name: string; setName: (s: string) => void; onNext: () => void }) {
+function Splash({ name, setName, onNext, onRestore }: { name: string; setName: (s: string) => void; onNext: () => void; onRestore?: () => void }) {
   const keyboard = useKeyboardInset();
   const insets = useSafeAreaInsets();
   const open = keyboard > 0;
@@ -261,6 +262,11 @@ function Splash({ name, setName, onNext }: { name: string; setName: (s: string) 
         onSubmitEditing={() => name.trim() && onNext()} submitBehavior="blurAndSubmit"
       />
       <Button label={t("ob.splash.create")} disabled={!name.trim()} onPress={() => { Keyboard.dismiss(); onNext(); }} />
+      {onRestore && !open && (
+        <Pressable onPress={onRestore} hitSlop={8} accessibilityRole="button">
+          <Text style={styles.restoreLink}>{t("account.haveCharacter")}</Text>
+        </Pressable>
+      )}
     </Pressable>
   );
 }
@@ -520,6 +526,7 @@ const styles = StyleSheet.create({
   hero: { color: color.text, fontSize: 34, fontWeight: "800", lineHeight: 40 },
   heroSmall: { fontSize: 26, lineHeight: 32 },
   lead: { color: color.textDim, fontSize: 16, lineHeight: 22 },
+  restoreLink: { color: color.textDim, fontSize: 14, fontWeight: "600", textAlign: "center", paddingVertical: 14 },
   title: { color: color.text, fontSize: 26, fontWeight: "800", lineHeight: 32, marginTop: 8 },
   hint: { color: color.textDim, fontSize: 14 },
   options: { gap: 10, marginTop: 14 },

@@ -1,6 +1,6 @@
 # Life Quest app
 
-Expo (SDK 57, React Native 0.86) client. One screen so far: the map HUD with fog of war, the XP bar and skill chips, and today's quest log.
+Expo (SDK 56, React Native 0.85) client. One screen so far: the map HUD with fog of war, the XP bar and skill chips, and today's quest log.
 
 ![First screen](docs/first-screen.png)
 

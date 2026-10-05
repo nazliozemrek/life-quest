@@ -24,7 +24,8 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "@rnmapbox/maps"
+      "@rnmapbox/maps",
+      "expo-status-bar"
     ],
     "backgroundColor": "#0B0E14"
   }

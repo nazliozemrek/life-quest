@@ -12,7 +12,8 @@ export type SyncOp =
   | { op: "profile"; player: Pick<Player, "name" | "difficulty"> & { profile: NonNullable<Player["profile"]> } }
   | { op: "xp"; key: string; source: "quest" | "backstory" | "creation"; title: string | null; xp: number;
       split: Record<string, number>; rested: number; multipliers: Record<string, number> }
-  | { op: "goals"; goals: Goal[] };
+  | { op: "goals"; goals: Goal[] }
+  | { op: "node"; id: string };
 
 export function profileOp(p: Player): SyncOp | null {
   return p.profile ? { op: "profile", player: { name: p.name, difficulty: p.difficulty, profile: p.profile } } : null;
@@ -40,6 +41,11 @@ export function goalsOp(goals: Goal[]): SyncOp {
   return { op: "goals", goals: goals.map(({ id, title, horizon, skill }) => ({ id, title, horizon, skill })) };
 }
 
+/** A skill tree node the player bought. Idempotent: re-sending one is a no-op. */
+export function nodeOp(id: string): SyncOp {
+  return { op: "node", id };
+}
+
 /** The slice of the Supabase client the flush uses, so tests can pass a recorder. */
 export interface Db {
   from(table: string): {
@@ -62,7 +68,9 @@ export async function flush(
   let i = 0;
   for (; i < ops.length; i++) {
     const o = ops[i];
-    const { error } = o.op === "profile" ? await sendProfile(db, o) : o.op === "goals" ? await sendGoals(db, o.goals) : await db.from("xp_ledger").upsert({
+    const { error } = o.op === "profile" ? await sendProfile(db, o) : o.op === "goals" ? await sendGoals(db, o.goals)
+      : o.op === "node" ? await db.from("player_skill_nodes").upsert({ node_id: o.id }, { onConflict: "player_id,node_id", ignoreDuplicates: true })
+      : await db.from("xp_ledger").upsert({
       idempotency_key: o.key, source: o.source, title: o.title, final_xp: o.xp, skill_split: o.split,
       rested_consumed: o.rested, multipliers: o.multipliers, curve_version: CURVE_VERSION,
     }, { onConflict: "player_id,idempotency_key", ignoreDuplicates: true });

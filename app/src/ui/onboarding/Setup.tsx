@@ -128,18 +128,21 @@ export function PlacesStep({ places, setPlaces, explored, position, onNext }: {
   );
 }
 
-/** For a character made before goals and places existed: just these two screens, once. */
-export function SetupFlow({ explored, position, onDone }: {
+/** Goals and places on their own: once for a character made before they existed, and from the profile to edit. */
+export function SetupFlow({ explored, position, onDone, onCancel, initialGoals = [], initialPlaces = [] }: {
   explored: ReadonlySet<string>; position: Fix; onDone: (goals: Goal[], places: Place[]) => void;
+  onCancel?: () => void; initialGoals?: Goal[]; initialPlaces?: Place[];
 }) {
   const [step, setStep] = useState<"goals" | "places">("goals");
-  const [goals, setGoals] = useState<Goal[]>([]);
-  const [places, setPlaces] = useState<Place[]>([]);
+  const [goals, setGoals] = useState<Goal[]>(initialGoals);
+  const [places, setPlaces] = useState<Place[]>(initialPlaces);
   return (
     <SafeAreaView style={styles.screen} edges={["top", "bottom"]}>
       <View style={styles.topBar}>
         {step === "places" ? (
           <Pressable onPress={() => setStep("goals")} hitSlop={12}><Text style={styles.topLink}>‹ Back</Text></Pressable>
+        ) : onCancel ? (
+          <Pressable onPress={onCancel} hitSlop={12}><Text style={styles.topLink}>‹ Cancel</Text></Pressable>
         ) : <Text style={styles.kicker}>NEW: GOALS AND PLACES</Text>}
       </View>
       <View style={styles.body}>

@@ -1,10 +1,12 @@
 import { cellToLatLng } from "h3-js";
 import { useMemo, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Modal, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { Quest } from "../../../src/quests/quest-generator";
 import { hud as toHud, previewAward, questGate } from "../game/session";
+import { availableCount } from "../game/skilltree";
 import { HudHeader } from "./HudHeader";
+import { Profile } from "./profile/Profile";
 import { Onboarding } from "./onboarding/Onboarding";
 import { SetupFlow } from "./onboarding/Setup";
 import { GameMap } from "./map/GameMap";
@@ -28,6 +30,8 @@ export function GameScreen() {
 function World({ game }: { game: ReturnType<typeof useGameSession> }) {
   const { session, event, mode, walkTo, complete } = game;
   const [focused, setFocused] = useState<Quest | null>(null);
+  const [sheet, setSheet] = useState(false);
+  const unlockable = useMemo(() => availableCount(session.player), [session.player]);
   const hud = useMemo(() => toHud(session), [session]);
 
   const rows = useMemo<QuestRowModel[]>(() => session.quests.map(entry => {
@@ -76,7 +80,7 @@ function World({ game }: { game: ReturnType<typeof useGameSession> }) {
       <GameMap {...mapProps} />
 
       <SafeAreaView edges={["top"]} pointerEvents="box-none">
-        <HudHeader hud={hud} player={session.player} />
+        <HudHeader hud={hud} player={session.player} points={unlockable} onPress={() => setSheet(true)} />
         <View style={styles.chips} pointerEvents="none">
           <View style={styles.chip}>
             <Text style={styles.chipText} numberOfLines={1}>
@@ -102,6 +106,12 @@ function World({ game }: { game: ReturnType<typeof useGameSession> }) {
       </View>
 
       <Toast event={event} />
+
+      <Modal visible={sheet} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setSheet(false)}>
+        <Profile session={session} onClose={() => setSheet(false)} onUnlock={game.unlock} onTitle={game.setTitle}
+          onEditSetup={game.finishSetup} />
+        <Toast event={event} />
+      </Modal>
     </View>
   );
 }

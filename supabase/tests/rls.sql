@@ -41,6 +41,17 @@ do $$ begin
   assert (select string_agg(title, ',') from player_goals) = 'Learn to code', 'goals replaced';
 end $$;
 
+-- Skill nodes: insert once, a resend is a no-op, and they can't be taken back or forged.
+insert into player_skill_nodes (node_id) values ('craft.steady_focus') on conflict do nothing;
+insert into player_skill_nodes (node_id) values ('craft.steady_focus') on conflict do nothing;
+do $$ begin
+  assert (select count(*) from player_skill_nodes) = 1, 'node stored once';
+  begin delete from player_skill_nodes; raise exception 'nodes were deletable';
+  exception when insufficient_privilege then null; end;
+  begin insert into player_skill_nodes (node_id) values ('gold.infinite'); raise exception 'bad node id accepted';
+  exception when check_violation then null; end;
+end $$;
+
 -- The app re-sends its profile as an upsert (PostgREST on_conflict=id): updates the editable columns only.
 insert into players (handle, class, difficulty, rules_mode, timezone) values ('Kaan E', 'artisan', 'normal', 'hard', 'Europe/Istanbul')
 on conflict (id) do update set handle = excluded.handle, class = excluded.class, difficulty = excluded.difficulty,
@@ -71,6 +82,7 @@ do $$ begin
   assert (select count(*) from xp_ledger) = 0, 'B sees A''s ledger';
   assert (select count(*) from player_explored_cells) = 0, 'B sees A''s map';
   assert (select count(*) from player_goals) = 0, 'B sees A''s goals';
+  assert (select count(*) from player_skill_nodes) = 0, 'B sees A''s nodes';
   delete from player_goals where id like '%';
   begin
     insert into xp_ledger (player_id, idempotency_key, source, final_xp, curve_version)

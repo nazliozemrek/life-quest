@@ -10,8 +10,9 @@ import {
   DISTRICT_MILESTONES, FOG_RES, districtOf, districtProgress, revealCells, validateFixes, type Fix,
 } from "../../../src/spatial/spatial-engine";
 import type { Quest } from "../../../src/quests/quest-generator";
-import { CLASSES, type ClassCode, type OnboardingAnswers } from "../../../src/onboarding/calibration";
+import { type ClassCode, type OnboardingAnswers } from "../../../src/onboarding/calibration";
 import type { Goal } from "./setup";
+import { xpBonus } from "./skilltree";
 
 export const SKILLS: readonly SkillCode[] = ["vitality", "craft", "wealth", "charisma", "mindset"];
 
@@ -43,6 +44,8 @@ export interface Player {
   streakDays: number;
   skills: Record<SkillCode, SkillState>;
   profile?: Profile;
+  nodes?: string[];                  // skill tree nodes bought, in order; the class root is implied by profile.classNode
+  title?: string;                    // worn title from the trees, shown instead of the class name
 }
 
 export interface QuestEntry { quest: Quest; status: "open" | "done"; awardedXp?: number }
@@ -81,20 +84,21 @@ function awardInput(s: Session, q: Quest): AwardInput {
 /** What completing this quest would pay right now. Shown on the card; the server re-prices on submit. */
 export function previewAward(s: Session, q: Quest): AwardResult {
   const r = computeAward(awardInput(s, q));
-  // The class's starting skill node: {"xp_mult": {<class skill>: 0.05}} on that skill's share (pillar 4 §2 B).
-  const skill = s.player.profile && CLASSES[s.player.profile.className].skill;
-  const base = skill ? r.perSkill[skill] : undefined;
-  if (!skill || !base) return r;
-  const bonus = Math.floor(base * CLASS_NODE_MULT);
-  return {
-    ...r,
-    totalXp: r.totalXp + bonus,
-    perSkill: { ...r.perSkill, [skill]: base + bonus },
-    multipliers: { ...r.multipliers, classNode: 1 + CLASS_NODE_MULT },
-  };
+  // Skill tree nodes: {"xp_mult": {<skill>: x}} on that skill's share only (pillar 1 skill_nodes.effects).
+  // The class root node (+5% in the class skill, pillar 4 §2 B) is one of them.
+  const bonus = xpBonus(s.player);
+  const perSkill = { ...r.perSkill };
+  let extra = 0;
+  for (const [skill, pct] of Object.entries(bonus) as [SkillCode, number][]) {
+    const base = perSkill[skill];
+    if (!base || !pct) continue;
+    const add = Math.floor(base * pct);
+    perSkill[skill] = base + add;
+    extra += add;
+  }
+  if (!extra) return r;
+  return { ...r, totalXp: r.totalXp + extra, perSkill, multipliers: { ...r.multipliers, skillTree: 1 + extra / (r.totalXp || 1) } };
 }
-
-const CLASS_NODE_MULT = 0.05;
 
 export type Gate = { ok: true } | { ok: false; reason: string };
 

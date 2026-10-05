@@ -6,6 +6,7 @@ import { pickDailySet } from "../../../src/quests/quest-pool";
 import { DISTRICT_RES, districtOf } from "../../../src/spatial/spatial-engine";
 import { playerLevels, skillForm, skillLevels } from "../../../src/xp/xp-engine";
 import { SKILLS, type QuestEntry, type Session } from "./session";
+import { focusSkills as treeFocus } from "./skilltree";
 
 export const DAILY_COUNT = 6;
 const CELLS_PER_DISTRICT = 343;
@@ -62,6 +63,8 @@ export function playerContext(s: Session, now: Date): Omit<PlayerContext, "playe
 export function poolQuests(s: Session, day: string): QuestEntry[] {
   const ctx = playerContext(s, new Date());
   const seed = `${s.player.profile?.createdAt ?? "guest"}:${day}`;
-  const focusSkills = (s.player.profile?.goals ?? []).flatMap(g => (g.skill ? [g.skill] : []));
+  // Goals first, then skills whose tree Path says so.
+  const focus = [...(s.player.profile?.goals ?? []).flatMap(g => (g.skill ? [g.skill] : [])), ...treeFocus(s.player)];
+  const focusSkills = [...new Set(focus)];
   return pickDailySet(ctx, seed, DAILY_COUNT, { focusSkills }).map(quest => ({ quest, status: "open" as const }));
 }

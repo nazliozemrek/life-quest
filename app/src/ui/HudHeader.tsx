@@ -1,18 +1,21 @@
-import { StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { Hud, Player } from "../game/session";
 import { color, skillColor, skillLabel } from "./theme";
 import { XpBar } from "./XpBar";
 
 const CLASS_NAME = { warrior: "Warrior", artisan: "Artisan", merchant: "Merchant", bard: "Bard", sage: "Sage" } as const;
 
-export function HudHeader({ hud, player }: { hud: Hud; player: Player }) {
-  const cls = player.profile && CLASS_NAME[player.profile.className];
+/** Tap anywhere on it to open the character sheet. `points` > 0 shows a gold dot: there's a skill node to buy. */
+export function HudHeader({ hud, player, points, onPress }: { hud: Hud; player: Player; points: number; onPress(): void }) {
+  const cls = player.title ?? (player.profile && CLASS_NAME[player.profile.className]);
   return (
-    <View style={styles.panel}>
+    <Pressable onPress={onPress} style={styles.panel} accessibilityRole="button"
+      accessibilityLabel={`Open character${points ? `, ${points} skill unlocks available` : ""}`}>
       <View style={styles.row}>
         <View style={styles.badge}>
           <Text style={styles.badgeLabel}>LV</Text>
           <Text style={styles.badgeLevel}>{hud.level}</Text>
+          {points > 0 && <View style={styles.pointsDot}><Text style={styles.pointsText}>{points}</Text></View>}
         </View>
         <View style={styles.main}>
           <View style={styles.titleRow}>
@@ -39,7 +42,7 @@ export function HudHeader({ hud, player }: { hud: Hud; player: Player }) {
           </View>
         ))}
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -54,6 +57,11 @@ const styles = StyleSheet.create({
     borderWidth: 2, borderColor: color.xp, backgroundColor: "rgba(245, 196, 81, 0.08)",
   },
   badgeLabel: { color: color.xp, fontSize: 9, fontWeight: "700", letterSpacing: 1 },
+  pointsDot: {
+    position: "absolute", top: -6, right: -6, minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 4,
+    alignItems: "center", justifyContent: "center", backgroundColor: color.xp,
+  },
+  pointsText: { color: color.bg, fontSize: 11, fontWeight: "900" },
   badgeLevel: { color: color.text, fontSize: 20, fontWeight: "800", marginTop: -2, fontVariant: ["tabular-nums"] },
   main: { flex: 1, gap: 6 },
   titleRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" },

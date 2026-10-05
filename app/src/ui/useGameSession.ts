@@ -9,7 +9,8 @@ import { CREATION_QUEST, startGame } from "../game/onboarding";
 import { applySetup, type Goal, type Place } from "../game/setup";
 import { SAVE_KEY, dayKey, restore, serialize } from "../game/persist";
 import { applyFixes, completeQuest, planWalk, spawnAt, type Session } from "../game/session";
-import { creationOps, goalsOp, profileOp, questOp } from "../net/outbox";
+import { creationOps, goalsOp, nodeOp, profileOp, questOp } from "../net/outbox";
+import { NODES, unlockNode } from "../game/skilltree";
 import { useCloudSync } from "../net/useCloudSync";
 import type { LatLng } from "./map/types";
 
@@ -165,5 +166,20 @@ export function useGameSession() {
     cloud.enqueue(goalsOp(goals));
   }, [commit, cloud]);
 
-  return { session, loaded, event, mode, walkTo, complete, begin, finishSetup };
+  /** Buy a skill tree node. The rules are checked again here, so a stale screen can't overspend. */
+  const unlock = useCallback((id: string) => {
+    const s = latest.current;
+    const r = unlockNode(s.player, id);
+    if (!r.ok) return emit({ kind: "error", message: r.reason });
+    commit({ ...s, player: r.player });
+    emit({ kind: "info", title: `Unlocked ${NODES.get(id)!.name}` });
+    cloud.enqueue(nodeOp(id));
+  }, [commit, emit, cloud]);
+
+  const setTitle = useCallback((title: string | null) => {
+    const s = latest.current;
+    commit({ ...s, player: { ...s.player, title: title ?? undefined } });
+  }, [commit]);
+
+  return { session, loaded, event, mode, walkTo, complete, begin, finishSetup, unlock, setTitle };
 }

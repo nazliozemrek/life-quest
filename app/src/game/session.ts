@@ -225,7 +225,7 @@ export function hud(s: Session): Hud {
     }),
     district: {
       id: district,
-      name: s.districtNames[district] ?? "Uncharted district",
+      name: s.districtNames[district] ?? "Uncharted",
       pct,
       next: DISTRICT_MILESTONES.find(m => m.pct > pct) ?? null,
     },

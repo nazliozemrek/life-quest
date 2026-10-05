@@ -19,6 +19,7 @@ interface SyncState { ops: SyncOp[]; synced: string[]; bootstrapped: boolean }
 
 export function useCloudSync(
   loaded: boolean, session: Session, latest: MutableRefObject<Session>, commit: (s: Session) => void,
+  onNewQuests?: () => void,
 ) {
   const state = useRef<SyncState | null>(null);
   const flushing = useRef(false);
@@ -52,13 +53,20 @@ export function useCloudSync(
     if (!supabase || fetchedDay.current === today) return;
     const s = latest.current;
     const { data, error } = await supabase.functions.invoke("daily-quests", {
-      body: { day: today, context: playerContext(s, new Date()) },
+      body: {
+        day: today,
+        context: { ...playerContext(s, new Date()), recentQuestTitles: [] },   // no quest history kept yet
+        current: s.quests.map(e => e.quest),
+      },
     });
     if (error || !data?.quests?.length || data.day !== today) return;
     fetchedDay.current = today;
     const now = latest.current;
-    if (now.quests.some(e => e.status === "done")) return;
-    commit({ ...now, quests: (data.quests as Quest[]).map(quest => ({ quest, status: "open" as const })) });
+    const next = data.quests as Quest[];
+    const same = next.length === now.quests.length && next.every((q, i) => q.title === now.quests[i].quest.title);
+    if (same || now.quests.some(e => e.status === "done")) return;
+    commit({ ...now, quests: next.map(quest => ({ quest, status: "open" as const })) });
+    onNewQuests?.();
   };
 
   const enqueue = useCallback((...ops: (SyncOp | null)[]) => {

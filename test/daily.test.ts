@@ -78,3 +78,21 @@ describe("dailyQuests", () => {
     expect(r.error).toContain("overloaded");
   });
 });
+
+describe("daily-quests request", () => {
+  const { playerId: _, ...context } = ctx;
+  it("keeps the set the phone already shows when there is no model", async () => {
+    const current = pickDailySet(ctx, "phone", 6);
+    const r = await dailyQuests(ctx, "server-seed", undefined, current);
+    expect(r.quests.map(q => q.title)).toEqual(current.map(q => q.title));
+    expect(r.quests.map(q => q.local_id)).toEqual(current.map(q => q.local_id));
+  });
+
+  it("rejects an empty or malformed context instead of storing an empty day", async () => {
+    const { DailyRequestSchema } = await import("../src/quests/daily.ts");
+    expect(DailyRequestSchema.safeParse({ day: "2026-10-05", context: {} }).success).toBe(false);
+    const wrongSkills = { ...context, skills: { VIT: { level: 1, form: 1 } } };
+    expect(DailyRequestSchema.safeParse({ day: "2026-10-05", context: wrongSkills }).success).toBe(false);
+    expect(DailyRequestSchema.safeParse({ day: "2026-10-05", context }).success).toBe(true);
+  });
+});

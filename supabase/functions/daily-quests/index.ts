@@ -3,7 +3,7 @@
 // AI-generated when ANTHROPIC_API_KEY is set as a function secret, otherwise (or on any failure) from the pool.
 // The same day always returns the stored set, so a reinstall or second device sees the same quests.
 import { createClient } from "@supabase/supabase-js";
-import { dailyQuests } from "../../../src/quests/daily.ts";
+import { DailyRequestSchema, dailyQuests } from "../../../src/quests/daily.ts";
 import { generateQuests, MODEL, PROMPT_VERSION, type PlayerContext } from "../../../src/quests/quest-generator.ts";
 
 const cors = {
@@ -24,17 +24,20 @@ Deno.serve(async req => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return json({ error: "unauthorized" }, 401);
 
-  let body: { day?: string; context?: Omit<PlayerContext, "playerId"> };
-  try { body = await req.json(); } catch { return json({ error: "bad_json" }, 400); }
-  const day = body.day ?? "";
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !body.context) return json({ error: "bad_request" }, 400);
+  let raw: unknown;
+  try { raw = await req.json(); } catch { return json({ error: "bad_json" }, 400); }
+  const parsed = DailyRequestSchema.safeParse(raw);
+  if (!parsed.success) return json({ error: "bad_request", issues: parsed.error.issues.slice(0, 5) }, 400);
+  const { day, context, current } = parsed.data;
 
   const stored = await supabase.from("daily_quest_sets").select("quests").eq("day", day).maybeSingle();
   if (stored.data) return json({ day, quests: stored.data.quests, source: "stored" });
 
-  const ctx: PlayerContext = { ...body.context, playerId: user.id };
+  const ctx: PlayerContext = { ...context, playerId: user.id };
   const hasKey = !!Deno.env.get("ANTHROPIC_API_KEY");
-  const r = await dailyQuests(ctx, `${user.id}:${day}`, hasKey ? generateQuests : undefined);
+  const r = await dailyQuests(ctx, `${user.id}:${day}`, hasKey ? generateQuests : undefined, current);
+  // A day with no quests would stick for 24 hours: never store one.
+  if (!r.quests.length) return json({ error: "no_quests" }, 500);
 
   const gen = await supabase.from("quest_generations").insert({
     day, source: r.source, prompt_version: PROMPT_VERSION, model: r.source === "pool" ? null : MODEL,

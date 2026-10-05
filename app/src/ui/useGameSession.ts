@@ -19,7 +19,8 @@ const SAVE_DEBOUNCE_MS = 1000;
 
 export type GameEvent =
   | { kind: "xp"; xp: number; title: string; levelUp: number | null }
-  | { kind: "error"; message: string };
+  | { kind: "error"; message: string }
+  | { kind: "info"; title: string };
 
 /** "gps": the phone's location drives the player. "simulated": permission denied or unavailable, tap to walk. */
 export type MoveMode = "starting" | "gps" | "simulated";
@@ -126,14 +127,16 @@ export function useGameSession() {
     }, STEP_MS);
   }, [stopWalk, commit]);
 
-  const cloud = useCloudSync(loaded, session, latest, commit);
+  const cloud = useCloudSync(loaded, session, latest, commit,
+    () => emit({ kind: "info", title: "New quests from the Quest Master" }));
 
-  const complete = useCallback((localId: string) => {
+  const complete = useCallback((localId: string, title: string) => {
     const s = latest.current;
+    // The list can be replaced by the server's set between render and tap; only complete what the player saw.
+    if (s.quests.find(e => e.quest.local_id === localId)?.quest.title !== title) return;
     const r = completeQuest(s, localId);
     if (!r.ok) return emit({ kind: "error", message: r.reason });
     commit(r.session);
-    const title = s.quests.find(e => e.quest.local_id === localId)!.quest.title;
     emit({ kind: "xp", xp: r.award.totalXp, title, levelUp: r.levelUp?.to ?? null });
     cloud.enqueue(questOp(dayKey(new Date()), localId, title, r.award));
   }, [commit, emit, cloud]);

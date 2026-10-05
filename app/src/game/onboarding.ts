@@ -19,7 +19,7 @@ export const SKIPPED: OnboardingAnswers = {
   sleepHours: "7+",
   lifeEvents12m: [],
   support: 0,
-  transport: "walk_only",
+  transport: "car",                  // the only transport answer that adds no constraint tag
   achievements: [],
   focusClass: "sage",
   goals: [],

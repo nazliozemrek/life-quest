@@ -31,6 +31,8 @@ export function Toast({ event }: { event: (GameEvent & { id: number }) | null })
           <Text style={styles.xp}>+{event.xp} XP</Text>
           <Text style={styles.title} numberOfLines={1}>{event.title}</Text>
         </>
+      ) : event.kind === "info" ? (
+        <Text style={styles.error}>{event.title}</Text>
       ) : (
         <Text style={styles.error}>{event.message}</Text>
       )}

@@ -10,7 +10,7 @@ interface Props {
   rows: QuestRowModel[];
   done: number;
   total: number;
-  onComplete(localId: string): void;
+  onComplete(localId: string, title: string): void;
   onLocate(quest: Quest): void;
 }
 
@@ -33,7 +33,7 @@ export function QuestList({ rows, done, total, onComplete, onLocate }: Props) {
       {open && (
         <ScrollView contentContainerStyle={styles.list}>
           {sorted.map(r => (
-            <QuestRow key={r.entry.quest.local_id} row={r} onComplete={onComplete} onLocate={onLocate} />
+            <QuestRow key={`${r.entry.quest.local_id}:${r.entry.quest.title}`} row={r} onComplete={onComplete} onLocate={onLocate} />
           ))}
         </ScrollView>
       )}
@@ -76,7 +76,7 @@ function QuestRow({ row, onComplete, onLocate }: { row: QuestRowModel } & Pick<P
         ) : (
           <Pressable
             disabled={!row.gate.ok}
-            onPress={() => onComplete(q.local_id)}
+            onPress={() => onComplete(q.local_id, q.title)}
             style={({ pressed }) => [styles.button, !row.gate.ok && styles.buttonLocked, pressed && styles.buttonPressed]}
             accessibilityRole="button"
             accessibilityLabel={`Complete ${q.title}`}

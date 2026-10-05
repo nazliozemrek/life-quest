@@ -40,3 +40,17 @@ describe("player context", () => {
     expect(back.quests.map(e => e.quest.title)).not.toEqual(s.quests.map(e => e.quest.title));
   });
 });
+
+describe("daily-quests request from the app", () => {
+  it("passes the server's request schema", async () => {
+    const { DailyRequestSchema } = await import("../../src/quests/daily");
+    const s = player();
+    const body = { day: "2026-10-05", context: { ...playerContext(s, new Date(NOW)), recentQuestTitles: [] }, current: s.quests.map(e => e.quest) };
+    const r = DailyRequestSchema.safeParse(body);
+    expect(r.success ? [] : r.error.issues).toEqual([]);
+  });
+
+  it("doesn't tag a skipped transport card as 'no vehicle'", () => {
+    expect(player().player.profile!.constraints).toEqual([]);
+  });
+});

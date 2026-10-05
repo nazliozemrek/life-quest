@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { Quest } from "../../../src/quests/quest-generator";
 import type { Gate, QuestEntry } from "../game/session";
 import { color, skillColor, skillLabel, tierLabel } from "./theme";
@@ -19,19 +20,37 @@ export function QuestList({ rows, done, total, onComplete, onLocate }: Props) {
   const [open, setOpen] = useState(true);
   const rank = (r: QuestRowModel) => (r.entry.status === "done" ? 2 : r.gate.ok ? 0 : 1);
   const sorted = [...rows].sort((a, b) => rank(a) - rank(b));
+  const insets = useSafeAreaInsets();
+  // Collapsed, the bar must still read over a dark map: solid panel, gold edge, progress, and the next quest.
+  const next = sorted.find(r => r.entry.status !== "done" && r.gate.ok) ?? sorted.find(r => r.entry.status !== "done");
 
   return (
-    <View style={[styles.sheet, open ? styles.sheetOpen : null]}>
+    <View style={[styles.sheet, open ? styles.sheetOpen : styles.sheetClosed, !open && { paddingBottom: insets.bottom }]}>
       <Pressable onPress={() => setOpen(o => !o)} style={styles.header} accessibilityRole="button"
         accessibilityLabel={open ? "Collapse quest log" : "Expand quest log"}>
         <View style={styles.grabber} />
         <View style={styles.headerRow}>
           <Text style={styles.heading}>Today's Quests</Text>
-          <Text style={styles.count}>{done}/{total}</Text>
+          <View style={styles.headerRight}>
+            <Text style={styles.count}>{done}/{total}</Text>
+            <Text style={styles.chevron}>{open ? "▾" : "▴"}</Text>
+          </View>
         </View>
+        {!open && (
+          <>
+            <View style={styles.progress}>
+              <View style={[styles.progressFill, { width: `${total ? (done / total) * 100 : 0}%` }]} />
+            </View>
+            {next && (
+              <Text style={styles.next} numberOfLines={1}>
+                Next: <Text style={styles.nextTitle}>{next.entry.quest.title}</Text>  +{next.previewXp} XP
+              </Text>
+            )}
+          </>
+        )}
       </Pressable>
       {open && (
-        <ScrollView contentContainerStyle={styles.list}>
+        <ScrollView contentContainerStyle={[styles.list, { paddingBottom: 24 + insets.bottom }]}>
           {sorted.map(r => (
             <QuestRow key={`${r.entry.quest.local_id}:${r.entry.quest.title}`} row={r} onComplete={onComplete} onLocate={onLocate} />
           ))}
@@ -97,12 +116,19 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth, borderColor: color.panelBorder,
   },
   sheetOpen: { maxHeight: "46%" },
+  sheetClosed: { backgroundColor: "#121722", borderColor: "rgba(245, 196, 81, 0.45)", borderWidth: 1 },
   header: { paddingTop: 8, paddingBottom: 10, paddingHorizontal: 16 },
-  grabber: { alignSelf: "center", width: 36, height: 4, borderRadius: 2, backgroundColor: color.textFaint, marginBottom: 8 },
+  grabber: { alignSelf: "center", width: 40, height: 5, borderRadius: 3, backgroundColor: color.textDim, marginBottom: 8 },
   headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" },
   heading: { color: color.text, fontSize: 16, fontWeight: "700" },
+  headerRight: { flexDirection: "row", alignItems: "baseline", gap: 8 },
   count: { color: color.textDim, fontSize: 13, fontVariant: ["tabular-nums"] },
-  list: { paddingHorizontal: 12, paddingBottom: 24, gap: 8 },
+  chevron: { color: color.xp, fontSize: 16, fontWeight: "800" },
+  progress: { height: 4, borderRadius: 2, backgroundColor: color.track, marginTop: 8, overflow: "hidden" },
+  progressFill: { height: 4, backgroundColor: color.xp },
+  next: { color: color.textDim, fontSize: 12, marginTop: 6 },
+  nextTitle: { color: color.text, fontWeight: "700" },
+  list: { paddingHorizontal: 12, gap: 8 },
   row: { flexDirection: "row", borderRadius: 12, backgroundColor: "rgba(255,255,255,0.04)", overflow: "hidden" },
   rowDone: { opacity: 0.5 },
   stripe: { width: 4 },

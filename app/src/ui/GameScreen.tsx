@@ -17,7 +17,7 @@ const MapboxMap = lazy(() => import("./map/MapboxMap"));
 const USE_MAPBOX = !!process.env.EXPO_PUBLIC_MAPBOX_TOKEN && Platform.OS !== "web" && !isRunningInExpoGo();
 
 export function GameScreen() {
-  const { session, event, walkTo, complete } = useGameSession();
+  const { session, event, mode, walkTo, complete } = useGameSession();
   const [focused, setFocused] = useState<Quest | null>(null);
   const hud = useMemo(() => toHud(session), [session]);
 
@@ -54,7 +54,10 @@ export function GameScreen() {
     waypoints: session.waypoints,
     districts,
     focus,
-    onPress: target => { setFocused(null); walkTo(target); },
+    onPress: target => {
+      setFocused(null);
+      if (mode === "simulated") walkTo(target);  // with GPS on, only walking moves the player
+    },
   };
 
   const { district } = hud;
@@ -77,7 +80,9 @@ export function GameScreen() {
               {district.next && ` · +${district.next.xp} XP at ${district.next.pct * 100}%`}
             </Text>
           </View>
-          {!USE_MAPBOX && <Text style={styles.hint} numberOfLines={1}>Tap map to walk</Text>}
+          {mode !== "starting" && (
+            <Text style={styles.hint} numberOfLines={1}>{mode === "gps" ? "GPS on · walk to explore" : "Tap map to walk"}</Text>
+          )}
         </View>
       </SafeAreaView>
 

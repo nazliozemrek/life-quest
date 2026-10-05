@@ -25,7 +25,13 @@
     },
     "plugins": [
       "@rnmapbox/maps",
-      "expo-status-bar"
+      "expo-status-bar",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Life Quest reveals the map where you walk and checks you in at quest locations."
+        }
+      ]
     ],
     "backgroundColor": "#0B0E14"
   }

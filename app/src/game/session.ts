@@ -167,6 +167,26 @@ export function walkTo(s: Session, to: { lat: number; lng: number }) {
   return applyFixes(s, planWalk(s.position, to));
 }
 
+/**
+ * Place the player at the first real GPS fix of an app run. It is validated with no previous fix, so a player
+ * who opens the app far from where they last were isn't rejected as a teleport; the server treats a new
+ * session the same way. The cells around the fix are revealed, since the player is standing there.
+ */
+export function spawnAt(s: Session, fix: Fix): { session: Session; revealed: number } {
+  const { accepted } = validateFixes([fix], null, fix.t);
+  if (accepted.length === 0) return { session: s, revealed: 0 };
+  const explored = new Set(s.explored);
+  const newCells = new Set(s.newCells);
+  let revealed = 0;
+  for (const c of revealCells(accepted)) {
+    if (explored.has(c)) continue;
+    explored.add(c);
+    newCells.add(c);
+    revealed++;
+  }
+  return { session: { ...s, explored, newCells, position: fix }, revealed };
+}
+
 // ---------- HUD view model ----------
 
 export interface Hud {

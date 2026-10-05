@@ -5,7 +5,7 @@ import { FOG_RES, districtOf } from "../../src/spatial/spatial-engine";
 import { playerLevels } from "../../src/xp/xp-engine";
 import { FRONTIER_DISTRICT, MOCK_QUESTS, WAYPOINTS, createSession } from "../src/game/mock-world";
 import { makeProjection } from "../src/game/projection";
-import { completeQuest, hud, planWalk, previewAward, questGate, walkTo } from "../src/game/session";
+import { applyFixes, completeQuest, hud, planWalk, previewAward, questGate, spawnAt, walkTo } from "../src/game/session";
 
 const NOW = Date.UTC(2026, 9, 5, 7, 0);
 const gym = WAYPOINTS.find(w => w.id === "wp_gym")!;
@@ -101,6 +101,28 @@ describe("session", () => {
     expect(session.position.lat).toBeCloseTo(gym.lat, 6);
     expect(revealed).toBeGreaterThanOrEqual(0);
     expect(latLngToCell(session.position.lat, session.position.lng, FOG_RES)).toBe(latLngToCell(gym.lat, gym.lng, FOG_RES));
+  });
+});
+
+describe("real GPS", () => {
+  const cupertino = { lat: 37.3349, lng: -122.009, t: NOW + 5_000, accuracyM: 5 };
+
+  it("a far-away first fix would be rejected as a teleport", () => {
+    expect(applyFixes(createSession(NOW), [cupertino]).revealed).toBe(0);
+  });
+
+  it("spawning places the player there and reveals the ring around them", () => {
+    const { session, revealed } = spawnAt(createSession(NOW), cupertino);
+    expect(session.position).toEqual(cupertino);
+    expect(revealed).toBe(7);
+    // The next fix a few seconds later validates against the spawn point as normal.
+    const next = applyFixes(session, [{ ...cupertino, lat: cupertino.lat + 0.0001, t: cupertino.t + 10_000 }]);
+    expect(next.session.position.lat).toBeCloseTo(cupertino.lat + 0.0001, 6);
+  });
+
+  it("refuses a spoofed first fix", () => {
+    const s = createSession(NOW);
+    expect(spawnAt(s, { ...cupertino, isMock: true }).session).toBe(s);
   });
 });
 

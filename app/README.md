@@ -16,13 +16,14 @@ npx expo start --web # browser preview
 Without a Mapbox token, or inside Expo Go, the map is an SVG renderer that draws the real H3 cells and the real `fogMask()` geometry over a plain grid. To get Mapbox tiles, set a public token and use a development build, because `@rnmapbox/maps` is a native module Expo Go doesn't include:
 
 ```bash
-EXPO_PUBLIC_MAPBOX_TOKEN=pk.... npx expo run:ios   # or run:android
+echo 'EXPO_PUBLIC_MAPBOX_TOKEN=pk....' > .env.local   # gitignored
+npx expo run:ios                                     # or run:android
 ```
 
 ## How to play the mock
 
 - **Complete** turns a quest in. The XP shown on each card comes from `computeAward()` with the player's live streak, rested pool, skill Form and daily caps, so it changes as you play (the rested pool doubles awards until it runs dry).
-- **Tap the map** to walk there. The walk is simulated GPS: one fix every 10 s at 1.4 m/s, run through `validateFixes()` and `revealCells()` just like the server will run real fixes.
+- **Walk.** With location permission, your real GPS fixes go through `validateFixes()` and `revealCells()`, the same path the server will use. The first fix of each run places you where you are. In the iOS Simulator, use Features → Location → City Run to walk a route. If you deny permission (or in the web preview), **tap the map** to walk there instead: simulated fixes every 10 s at 1.4 m/s.
 - **Tap a quest with a place** to frame it on the map. Gym and coast quests unlock only inside the waypoint's radius; the exploration quest unlocks after 15 new cells in the frontier district.
 
 ## Layout

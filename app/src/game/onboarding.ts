@@ -2,7 +2,8 @@
 // Pure; the screens live in ui/onboarding/.
 import { calibrate, type OnboardingAnswers } from "../../../src/onboarding/calibration";
 import { playerLevels, type SkillCode } from "../../../src/xp/xp-engine";
-import { MOCK_QUESTS } from "./mock-world";
+import { dayKey } from "./persist";
+import { poolQuests } from "./context";
 import { SKILLS, type Player, type Session } from "./session";
 
 /** Every Life Load card is skippable, and a skip scores zero load (pillar 4 §0.2). These are those zero-load answers. */
@@ -60,13 +61,14 @@ export function newPlayer(name: string, answers: OnboardingAnswers, now: number)
 
 /**
  * Replace whoever was playing with the new character. The explored map and position stay: they are the
- * player's real streets. Today's quests start over for the new character.
+ * player's real streets. Today's quests start over for the new character, from the pool until the server's arrive.
  */
 export function startGame(s: Session, name: string, answers: OnboardingAnswers, now = Date.now()) {
   const { player, calibration } = newPlayer(name, answers, now);
   const levelUp = { from: playerLevels.levelFor(calibration.backstory.total), to: playerLevels.levelFor(player.totalXp) };
+  const next: Session = { ...s, player, quests: [], newCells: new Set<string>() };
   return {
-    session: { ...s, player, quests: MOCK_QUESTS.map(quest => ({ quest, status: "open" as const })), newCells: new Set<string>() },
+    session: { ...next, quests: poolQuests(next, dayKey(new Date(now))) },
     calibration,
     levelUp: levelUp.to > levelUp.from ? levelUp : null,
   };

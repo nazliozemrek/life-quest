@@ -45,9 +45,12 @@ function isSavedGame(x: unknown): x is SavedGame {
 /**
  * Rebuild a session from storage. Same day: carry on exactly where the player left off. Later day: keep XP,
  * levels and the explored map, issue a fresh quest batch, and apply the day boundary to streak, Form and rested.
- * `fresh` supplies the world (waypoints, district names) and the new day's quests.
+ * `fresh` supplies the world (waypoints, district names); `newDayQuests` the new day's set (default: fresh's).
  */
-export function restore(raw: string | null, today: string, fresh: () => Session): Session {
+export function restore(
+  raw: string | null, today: string, fresh: () => Session,
+  newDayQuests: (s: Session, day: string) => QuestEntry[] = () => fresh().quests,
+): Session {
   const base = fresh();
   let saved: unknown;
   try { saved = raw ? JSON.parse(raw) : null; } catch { saved = null; }
@@ -75,10 +78,6 @@ export function restore(raw: string | null, today: string, fresh: () => Session)
   const idleDays = gap - 1 + (playedLastDay ? 0 : 1);
   const rested = accrueRested(p.rested, idleDays, playerLevels.levelFor(p.totalXp));
 
-  return {
-    ...kept,
-    player: { ...p, skills, streakDays, rested },
-    quests: base.quests,
-    newCells: new Set(),
-  };
+  const rolled: Session = { ...kept, player: { ...p, skills, streakDays, rested }, quests: [], newCells: new Set() };
+  return { ...rolled, quests: newDayQuests(rolled, today) };
 }

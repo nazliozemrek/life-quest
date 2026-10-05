@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { calibrate, type OnboardingAnswers } from "../../src/onboarding/calibration";
-import { createSession } from "../src/game/mock-world";
+import { MOCK_QUESTS, createSession } from "../src/game/mock-world";
 import { CREATION_QUEST, SKIPPED, newPlayer, startGame } from "../src/game/onboarding";
 import { restore, serialize } from "../src/game/persist";
 import { previewAward } from "../src/game/session";
@@ -36,9 +36,11 @@ describe("character creation", () => {
     expect(player.difficulty).toBe("hard");
   });
 
-  it("keeps the explored map and position, and resets today's quests", () => {
+  it("keeps the explored map and position, and starts today's quests from the pool", () => {
     const s = createSession(NOW);
     const r = startGame(s, "Kaan", newParent, NOW);
+    expect(r.session.quests).toHaveLength(6);
+    expect(r.session.quests.every(e => e.quest.rationale.startsWith("pool"))).toBe(true);
     expect(r.session.explored).toBe(s.explored);
     expect(r.session.position).toEqual(s.position);
     expect(r.session.quests.every(e => e.status === "open")).toBe(true);
@@ -47,7 +49,7 @@ describe("character creation", () => {
 
   it("pays the class skill 5% more", () => {
     const s = startGame(createSession(NOW), "Kaan", newParent, NOW).session;
-    const mindsetQuest = s.quests.find(e => e.quest.skill_weights.length === 1 && e.quest.skill_weights[0].skill === "mindset")!.quest;
+    const mindsetQuest = MOCK_QUESTS.find(q => q.skill_weights.length === 1 && q.skill_weights[0].skill === "mindset")!;
     const plain = previewAward({ ...s, player: { ...s.player, profile: undefined } }, mindsetQuest);
     const sage = previewAward(s, mindsetQuest);
     expect(sage.perSkill.mindset).toBe(plain.perSkill.mindset! + Math.floor(plain.perSkill.mindset! * 0.05));

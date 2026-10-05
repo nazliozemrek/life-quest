@@ -38,3 +38,19 @@ jobs:
       # Proves Metro resolves the shared engines and every native import for both platforms.
       - run: npx expo export --platform android --platform ios --output-dir dist
         working-directory: app
+
+  supabase:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+      # The v1 migration plus its access rules, on plain Postgres with a stand-in for Supabase's auth schema.
+      - run: npm run supabase:test

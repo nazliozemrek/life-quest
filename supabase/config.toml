@@ -1,0 +1,9 @@
+# Supabase CLI config for Life Quest. Link to the hosted project with `npx supabase link --project-ref <ref>`.
+project_id = "life-quest"
+
+[auth]
+# The app signs players in anonymously on first launch, so progress syncs before anyone makes an account.
+enable_anonymous_sign_ins = true
+
+[functions.daily-quests]
+verify_jwt = true

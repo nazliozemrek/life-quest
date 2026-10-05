@@ -13,7 +13,7 @@ npx expo start       # press i / a for a simulator, or scan the QR code with Exp
 npx expo start --web # browser preview
 ```
 
-Without a Mapbox token, or inside Expo Go, the map is an SVG renderer that draws the real H3 cells and the real `fogMask()` geometry over a plain grid. To get Mapbox tiles, set a public token and use a development build, because `@rnmapbox/maps` is a native module Expo Go doesn't include:
+Without a Mapbox token, or inside Expo Go, the map is an SVG renderer that draws the real H3 cells and the real `fogMask()` geometry over a plain grid. Set `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` in `.env.local` to sync progress and get the server's daily quests (see `../supabase/README.md`); without them the app runs offline with quests from the built-in pool. To get Mapbox tiles, set a public token and use a development build, because `@rnmapbox/maps` is a native module Expo Go doesn't include:
 
 ```bash
 echo 'EXPO_PUBLIC_MAPBOX_TOKEN=pk....' > .env.local   # gitignored
@@ -35,6 +35,8 @@ npx expo run:ios                                     # or run:android
 |---|---|
 | `src/game/session.ts` | Pure game state: award preview, quest gates, completion, walking, HUD view model |
 | `src/game/onboarding.ts` | Answers to a new player via `calibrate()` |
+| `src/game/context.ts` | Generator context from the session; the offline daily set from the quest pool |
+| `src/net/` | Supabase client, offline sync outbox, `useCloudSync` (see `../supabase/README.md`) |
 | `src/game/persist.ts` | Save/restore and the new-day rollover (pure; the hook does the storage I/O) |
 | `src/game/mock-world.ts` | Seed player, waypoints and a quest batch that passes the generator's schema and `validateBatch()` |
 | `src/ui/onboarding/` | Character creation screens |

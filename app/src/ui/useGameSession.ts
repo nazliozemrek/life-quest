@@ -4,9 +4,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Fix } from "../../../src/spatial/spatial-engine";
 import type { OnboardingAnswers } from "../../../src/onboarding/calibration";
 import { createSession } from "../game/mock-world";
+import { poolQuests } from "../game/context";
 import { CREATION_QUEST, startGame } from "../game/onboarding";
 import { SAVE_KEY, dayKey, restore, serialize } from "../game/persist";
 import { applyFixes, completeQuest, planWalk, spawnAt, type Session } from "../game/session";
+import { creationOps, profileOp, questOp } from "../net/outbox";
+import { useCloudSync } from "../net/useCloudSync";
 import type { LatLng } from "./map/types";
 
 /** Real time per simulated 10 s GPS fix. Fast enough to feel like a walk, slow enough to watch the fog lift. */
@@ -63,7 +66,7 @@ export function useGameSession() {
       .catch(() => null)
       .then(raw => {
         if (cancelled) return;
-        commit(restore(raw, dayKey(new Date()), createSession));
+        commit(restore(raw, dayKey(new Date()), createSession, poolQuests));
         setLoaded(true);
       });
     return () => { cancelled = true; };
@@ -123,6 +126,8 @@ export function useGameSession() {
     }, STEP_MS);
   }, [stopWalk, commit]);
 
+  const cloud = useCloudSync(loaded, session, latest, commit);
+
   const complete = useCallback((localId: string) => {
     const s = latest.current;
     const r = completeQuest(s, localId);
@@ -130,14 +135,17 @@ export function useGameSession() {
     commit(r.session);
     const title = s.quests.find(e => e.quest.local_id === localId)!.quest.title;
     emit({ kind: "xp", xp: r.award.totalXp, title, levelUp: r.levelUp?.to ?? null });
-  }, [commit, emit]);
+    cloud.enqueue(questOp(dayKey(new Date()), localId, title, r.award));
+  }, [commit, emit, cloud]);
 
   /** Finish character creation: the new player replaces the seed one, and the tutorial quest pays out. */
   const begin = useCallback((name: string, answers: OnboardingAnswers) => {
     const r = startGame(latest.current, name, answers);
     commit(r.session);
     emit({ kind: "xp", xp: CREATION_QUEST.xp, title: CREATION_QUEST.title, levelUp: r.levelUp?.to ?? null });
-  }, [commit, emit]);
+    cloud.markCreated();
+    cloud.enqueue(profileOp(r.session.player), ...creationOps(r.calibration, CREATION_QUEST.xp));
+  }, [commit, emit, cloud]);
 
   return { session, loaded, event, mode, walkTo, complete, begin };
 }

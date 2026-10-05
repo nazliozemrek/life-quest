@@ -107,6 +107,8 @@ export function Onboarding({ onDone }: { onDone: (name: string, answers: A) => v
   const [answers, setAnswers] = useState<A>(SKIPPED);
   const [classPicked, setClassPicked] = useState(false);
   const [sensitive, setSensitive] = useState(true);
+  // Cards start on the zero-load answers so a skip scores right, but nothing shows as chosen until the player taps.
+  const [answered, setAnswered] = useState<ReadonlySet<string>>(new Set());
   const [i, setI] = useState(0);
 
   const steps = useMemo<Step[]>(() => {
@@ -132,7 +134,14 @@ export function Onboarding({ onDone }: { onDone: (name: string, answers: A) => v
       <ClassSelect value={classPicked ? answers.focusClass : null}
         onPick={c => { set(a => ({ ...a, focusClass: c })); setClassPicked(true); next(); }} />
     ); break;
-    case "card": body = <CardView card={step.card} answers={answers} set={set} onNext={next} />; break;
+    case "card": {
+      const id = step.card.id;
+      body = (
+        <CardView card={step.card} answers={answers} answered={answered.has(id)} onNext={next}
+          set={f => { set(f); setAnswered(a => new Set(a).add(id)); }} />
+      );
+      break;
+    }
     case "consent": body = (
       <Consent
         onYes={() => { setSensitive(true); next(); }}
@@ -213,14 +222,16 @@ function ClassSelect({ value, onPick }: { value: ClassCode | null; onPick: (c: C
   );
 }
 
-function CardView({ card, answers, set, onNext }: { card: Card; answers: A; set: (f: (a: A) => A) => void; onNext: () => void }) {
+function CardView({ card, answers, answered, set, onNext }: {
+  card: Card; answers: A; answered: boolean; set: (f: (a: A) => A) => void; onNext: () => void;
+}) {
   return (
     <ScrollView contentContainerStyle={[styles.scroll, styles.cardScroll]}>
       <Text style={styles.title}>{card.title}</Text>
       {card.hint && <Text style={styles.hint}>{card.hint}</Text>}
       <View style={styles.options}>
         {card.kind === "single" && card.options.map(o => (
-          <Choice key={o.label} label={o.label} sub={o.sub} on={o.selected(answers)}
+          <Choice key={o.label} label={o.label} sub={o.sub} on={answered && o.selected(answers)}
             onPress={() => { set(o.apply); onNext(); }} />
         ))}
         {card.kind === "dependents" && <Dependents answers={answers} set={set} onNext={onNext} />}

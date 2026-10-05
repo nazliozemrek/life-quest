@@ -74,7 +74,7 @@ function World({ game }: { game: ReturnType<typeof useGameSession> }) {
   return (
     <View style={styles.screen}>
       {USE_MAPBOX ? (
-        <Suspense fallback={<PlaceholderMap {...mapProps} />}><MapboxMap {...mapProps} /></Suspense>
+        <Suspense fallback={<View style={StyleSheet.absoluteFill} />}><MapboxMap {...mapProps} /></Suspense>
       ) : (
         <PlaceholderMap {...mapProps} />
       )}

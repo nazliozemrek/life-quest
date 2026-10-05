@@ -3,9 +3,10 @@
 // Goals (E) and places (F) come later: they need the quest generator and real waypoints.
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Animated, Easing, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
+  Animated, Dimensions, Easing, Keyboard, LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
+  type KeyboardEvent,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   ACHIEVEMENTS, CLASSES, MODE_ORDER, backstoryXp, calibrate,
   type AchievementCode, type ClassCode, type LifeEvent, type OnboardingAnswers,
@@ -178,21 +179,53 @@ export function Onboarding({ onDone }: { onDone: (name: string, answers: A) => v
 
 // ---------- Steps ----------
 
+/**
+ * How much of the screen bottom the keyboard covers. Measured from the keyboard's top edge rather than its height,
+ * so iOS 26's floating keyboard (inset from the screen edge) is cleared too. KeyboardAvoidingView missed it.
+ */
+function useKeyboardInset(): number {
+  const [inset, setInset] = useState(0);
+  useEffect(() => {
+    const ios = Platform.OS === "ios";
+    const update = (e: KeyboardEvent) => {
+      if (ios) LayoutAnimation.configureNext(LayoutAnimation.create(e.duration || 250, "keyboard", "opacity"));
+      setInset(Math.max(0, Dimensions.get("screen").height - e.endCoordinates.screenY));
+    };
+    const hide = (e: KeyboardEvent) => {
+      if (ios) LayoutAnimation.configureNext(LayoutAnimation.create(e.duration || 250, "keyboard", "opacity"));
+      setInset(0);
+    };
+    const subs = ios
+      ? [Keyboard.addListener("keyboardWillChangeFrame", update), Keyboard.addListener("keyboardWillHide", hide)]
+      : [Keyboard.addListener("keyboardDidShow", update), Keyboard.addListener("keyboardDidHide", hide)];
+    return () => subs.forEach(x => x.remove());
+  }, []);
+  return inset;
+}
+
 function Splash({ name, setName, onNext }: { name: string; setName: (s: string) => void; onNext: () => void }) {
+  const keyboard = useKeyboardInset();
+  const insets = useSafeAreaInsets();
+  const open = keyboard > 0;
   return (
-    <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    // The screen already pads for the home indicator, so only the part of the keyboard above it needs clearing.
+    <Pressable style={[styles.fill, { paddingBottom: open ? Math.max(0, keyboard - insets.bottom) : 0 }]}
+      onPress={Keyboard.dismiss} accessible={false}>
       <View style={styles.center}>
         <Text style={styles.kicker}>LIFE QUEST</Text>
-        <Text style={styles.hero}>Your life is the open world.</Text>
-        <Text style={styles.lead}>A few questions set your class, your difficulty and your starting level. About three minutes.</Text>
+        <Text style={[styles.hero, open && styles.heroSmall]}>Your life is the open world.</Text>
+        {!open && (
+          <Text style={styles.lead}>A few questions set your class, your difficulty and your starting level. About three minutes.</Text>
+        )}
       </View>
       <TextInput
         style={styles.input} value={name} onChangeText={setName} placeholder="What should we call you?"
-        placeholderTextColor={color.textFaint} autoCapitalize="words" returnKeyType="next" maxLength={24}
-        onSubmitEditing={() => name.trim() && onNext()}
+        placeholderTextColor={color.textFaint} autoCapitalize="words" autoCorrect={false} textContentType="givenName"
+        autoComplete="name-given" returnKeyType="go" maxLength={24} keyboardAppearance="dark"
+        onSubmitEditing={() => name.trim() && onNext()} submitBehavior="blurAndSubmit"
       />
-      <Button label="Create your character" disabled={!name.trim()} onPress={onNext} />
-    </KeyboardAvoidingView>
+      <Button label="Create your character" disabled={!name.trim()} onPress={() => { Keyboard.dismiss(); onNext(); }} />
+    </Pressable>
   );
 }
 
@@ -460,6 +493,7 @@ const styles = StyleSheet.create({
   topLink: { color: color.textDim, fontSize: 15, minWidth: 56 },
   kicker: { color: color.xp, fontSize: 12, fontWeight: "800", letterSpacing: 2 },
   hero: { color: color.text, fontSize: 34, fontWeight: "800", lineHeight: 40 },
+  heroSmall: { fontSize: 26, lineHeight: 32 },
   lead: { color: color.textDim, fontSize: 16, lineHeight: 22 },
   title: { color: color.text, fontSize: 26, fontWeight: "800", lineHeight: 32, marginTop: 8 },
   hint: { color: color.textDim, fontSize: 14 },

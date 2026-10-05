@@ -377,7 +377,7 @@ function Reveal({ answers, set, onNext }: { answers: A; set: (f: (a: A) => A) =>
           const on = (answers.preferredMode ?? c.calibratedMode) === m;
           const xpMode = MODE_ORDER[Math.min(idx, calibratedIdx)];
           const sub = idx > calibratedIdx
-            ? `Stricter streaks, XP stays ×${DIFFICULTY_MULT[xpMode].toFixed(1)}`
+            ? `Stricter streak rules, same XP as ${MODE_NAME[MODE_ORDER[calibratedIdx]]} (×${DIFFICULTY_MULT[xpMode].toFixed(1)})`
             : `XP ×${DIFFICULTY_MULT[xpMode].toFixed(1)}${idx === calibratedIdx ? " · recommended" : ""}`;
           return <Choice key={m} label={MODE_NAME[m]} sub={sub} on={on} onPress={() => set(a => ({ ...a, preferredMode: m }))} />;
         })}

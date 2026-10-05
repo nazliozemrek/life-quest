@@ -12,19 +12,26 @@ import type { Session } from "../game/session";
 import { creationOps, flush, profileOp, type Db, type SyncOp } from "./outbox";
 import { ensureSignedIn, supabase } from "./supabase";
 import { cloudSave } from "../game/cloudsave";
+import type { Inbox } from "../game/social";
+import { fetchInbox } from "./social";
 
 const SYNC_KEY = "life-quest/sync";
 const FLUSH_DEBOUNCE_MS = 3000;
+/** Respect received is checked at most this often while playing, and always when the app comes to the front. */
+const INBOX_EVERY_MS = 5 * 60_000;
 
 interface SyncState { ops: SyncOp[]; synced: string[]; bootstrapped: boolean; savedHash?: string }
 
 export function useCloudSync(
   loaded: boolean, session: Session, latest: MutableRefObject<Session>, commit: (s: Session) => void,
-  onNewQuests?: () => void,
+  onNewQuests?: () => void, onRespect?: (inbox: Inbox) => void,
 ) {
   const state = useRef<SyncState | null>(null);
   const flushing = useRef(false);
   const fetchedDay = useRef<string | null>(null);
+  const inboxAt = useRef(0);
+  const onRespectRef = useRef(onRespect);
+  onRespectRef.current = onRespect;
 
   const save = () => AsyncStorage.setItem(SYNC_KEY, JSON.stringify(state.current)).catch(() => {});
 
@@ -41,6 +48,7 @@ export function useCloudSync(
       save();
       if (!r.remaining.length) await uploadSave();
       await fetchQuests();
+      await checkInbox();
     } catch {
       // Network gone mid-flush: everything left is still queued.
     } finally {
@@ -58,6 +66,14 @@ export function useCloudSync(
     if (st.savedHash === hash) return;
     const { error } = await supabase.from("player_saves").upsert({ save: body, updated_at: new Date().toISOString() }, { onConflict: "player_id" });
     if (!error) { state.current = { ...state.current!, savedHash: hash }; save(); }
+  };
+
+  /** Respect other players sent: its rested XP is credited once, by id. */
+  const checkInbox = async () => {
+    if (Date.now() - inboxAt.current < INBOX_EVERY_MS) return;
+    inboxAt.current = Date.now();
+    const inbox = await fetchInbox(latest.current.player.respectSeen ?? 0);
+    if (inbox && inbox.count > 0) onRespectRef.current?.(inbox);
   };
 
   /** Today's set from the server: AI-written when the backend has an API key. Replaces the pool set only if
@@ -116,7 +132,7 @@ export function useCloudSync(
     return () => clearTimeout(t);
   }, [session, loaded, run]);
   useEffect(() => {
-    const sub = AppState.addEventListener("change", s => { if (s === "active") run(); });
+    const sub = AppState.addEventListener("change", s => { if (s === "active") { inboxAt.current = 0; run(); } });
     return () => sub.remove();
   }, [run]);
 

@@ -47,6 +47,7 @@ export interface Player {
   profile?: Profile;
   nodes?: string[];                  // skill tree nodes bought, in order; the class root is implied by profile.classNode
   title?: string;                    // worn title from the trees, shown instead of the class name
+  respectSeen?: number;              // id of the last Respect whose rested XP was credited (game/social.ts)
 }
 
 export interface QuestEntry { quest: Quest; status: "open" | "done"; awardedXp?: number }

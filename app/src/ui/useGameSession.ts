@@ -15,6 +15,7 @@ import { useCloudSync } from "../net/useCloudSync";
 import { buzz } from "./haptics";
 import { msg, type Msg } from "../i18n";
 import { nodeName } from "../game/skilltree";
+import { creditRespect } from "../game/social";
 import type { LatLng } from "./map/types";
 
 /** Real time per simulated 10 s GPS fix. Fast enough to feel like a walk, slow enough to watch the fog lift. */
@@ -143,7 +144,16 @@ export function useGameSession() {
   }, [stopWalk, commit]);
 
   const cloud = useCloudSync(loaded, session, latest, commit,
-    () => emit({ kind: "info", title: msg("toast.newQuests") }));
+    () => emit({ kind: "info", title: msg("toast.newQuests") }),
+    inbox => {
+      const s = latest.current;
+      const player = creditRespect(s.player, inbox);
+      if (player === s.player) return;
+      commit({ ...s, player });
+      emit({ kind: "info", title: inbox.restedXp === 0 ? msg("social.receivedPlain", { n: inbox.count })
+        : inbox.count === 1 ? msg("social.receivedOne", { xp: inbox.restedXp })
+        : msg("social.receivedMany", { n: inbox.count, xp: inbox.restedXp }) });
+    });
 
   const complete = useCallback((localId: string, title: string) => {
     const s = latest.current;

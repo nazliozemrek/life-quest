@@ -1,12 +1,16 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Location from "expo-location";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Fix } from "../../../src/spatial/spatial-engine";
 import { createSession } from "../game/mock-world";
+import { SAVE_KEY, dayKey, restore, serialize } from "../game/persist";
 import { applyFixes, completeQuest, planWalk, spawnAt, type Session } from "../game/session";
 import type { LatLng } from "./map/types";
 
 /** Real time per simulated 10 s GPS fix. Fast enough to feel like a walk, slow enough to watch the fog lift. */
 const STEP_MS = 70;
+/** Saves are coalesced: a walk commits a fix every few seconds, and storage only needs the latest state. */
+const SAVE_DEBOUNCE_MS = 1000;
 
 export type GameEvent =
   | { kind: "xp"; xp: number; title: string; levelUp: number | null }
@@ -32,6 +36,7 @@ export function useGameSession() {
   const latest = useRef(session);
   const [event, setEvent] = useState<(GameEvent & { id: number }) | null>(null);
   const [mode, setMode] = useState<MoveMode>("starting");
+  const [loaded, setLoaded] = useState(false);
   const walkTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const eventId = useRef(0);
 
@@ -49,8 +54,32 @@ export function useGameSession() {
 
   useEffect(() => stopWalk, [stopWalk]);
 
-  // Real location: the first fix spawns the player, every later one goes through validation and fog reveal.
+  // Restore saved progress before anything else touches the session.
   useEffect(() => {
+    let cancelled = false;
+    AsyncStorage.getItem(SAVE_KEY)
+      .catch(() => null)
+      .then(raw => {
+        if (cancelled) return;
+        commit(restore(raw, dayKey(new Date()), createSession));
+        setLoaded(true);
+      });
+    return () => { cancelled = true; };
+  }, [commit]);
+
+  // Save after every change once restored. A failed write is retried by the next change.
+  useEffect(() => {
+    if (!loaded) return;
+    const t = setTimeout(() => {
+      AsyncStorage.setItem(SAVE_KEY, JSON.stringify(serialize(session, dayKey(new Date())))).catch(() => {});
+    }, SAVE_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  }, [session, loaded]);
+
+  // Real location: the first fix spawns the player, every later one goes through validation and fog reveal.
+  // Starts after the restore so a spawn can't be overwritten by the saved position.
+  useEffect(() => {
+    if (!loaded) return;
     let sub: Location.LocationSubscription | null = null;
     let cancelled = false;
     let spawned = false;
@@ -78,7 +107,7 @@ export function useGameSession() {
       }
     })();
     return () => { cancelled = true; sub?.remove(); };
-  }, [commit]);
+  }, [commit, loaded]);
 
   /** Walk to target, feeding one simulated fix per tick through the real validation and fog reveal. */
   const walkTo = useCallback((target: LatLng) => {

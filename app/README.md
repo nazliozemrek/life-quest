@@ -24,6 +24,7 @@ npx expo run:ios                                     # or run:android
 
 - **Complete** turns a quest in. The XP shown on each card comes from `computeAward()` with the player's live streak, rested pool, skill Form and daily caps, so it changes as you play (the rested pool doubles awards until it runs dry).
 - **Walk.** With location permission, your real GPS fixes go through `validateFixes()` and `revealCells()`, the same path the server will use. The first fix of each run places you where you are. In the iOS Simulator, use Features → Location → City Run to walk a route. If you deny permission (or in the web preview), **tap the map** to walk there instead: simulated fixes every 10 s at 1.4 m/s.
+- **Progress is saved on the device** (AsyncStorage). Reopening the app the same day resumes exactly; on a new day you keep XP, levels and the cleared fog, get a fresh quest batch, and the streak, Form and rested pool roll over.
 - **Tap a quest with a place** to frame it on the map. Gym and coast quests unlock only inside the waypoint's radius; the exploration quest unlocks after 15 new cells in the frontier district.
 
 ## Layout
@@ -31,6 +32,7 @@ npx expo run:ios                                     # or run:android
 | Path | What |
 |---|---|
 | `src/game/session.ts` | Pure game state: award preview, quest gates, completion, walking, HUD view model |
+| `src/game/persist.ts` | Save/restore and the new-day rollover (pure; the hook does the storage I/O) |
 | `src/game/mock-world.ts` | Seed player, waypoints and a quest batch that passes the generator's schema and `validateBatch()` |
 | `src/ui/` | `GameScreen`, `HudHeader`, `XpBar`, `QuestList`, `Toast` |
 | `src/ui/map/` | `PlaceholderMap` (SVG), `MapboxMap` (native), shared props |

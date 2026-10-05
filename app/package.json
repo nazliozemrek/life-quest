@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "main": "index.ts",
   "dependencies": {
+    "@react-native-async-storage/async-storage": "2.2.0",
     "@rnmapbox/maps": "^10.3.7",
     "expo": "~56.0.23",
     "expo-location": "~56.0.26",

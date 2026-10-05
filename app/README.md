@@ -1,6 +1,6 @@
 # Life Quest app
 
-Expo (SDK 56, React Native 0.85) client. One screen so far: the map HUD with fog of war, the XP bar and skill chips, and today's quest log.
+Expo (SDK 56, React Native 0.85) client. Character creation on first run, then the map HUD with fog of war, the XP bar and skill chips, and today's quest log.
 
 ![First screen](docs/first-screen.png)
 
@@ -22,6 +22,8 @@ npx expo run:ios                                     # or run:android
 
 ## How to play the mock
 
+- **First run** is character creation (pillar 4): name, class, 12 skippable Life Load cards (money and health behind a consent card), backstory achievements, the difficulty reveal with the one-step-harder override, and the starting-level fill. `calibrate()` sets the starting XP, skill levels and difficulty; the class skill earns +5%. Goals and places come later. To redo it, delete the app from the simulator.
+
 - **Complete** turns a quest in. The XP shown on each card comes from `computeAward()` with the player's live streak, rested pool, skill Form and daily caps, so it changes as you play (the rested pool doubles awards until it runs dry).
 - **Walk.** With location permission, your real GPS fixes go through `validateFixes()` and `revealCells()`, the same path the server will use. The first fix of each run places you where you are. In the iOS Simulator, use Features → Location → City Run to walk a route. If you deny permission (or in the web preview), **tap the map** to walk there instead: simulated fixes every 10 s at 1.4 m/s.
 - **Progress is saved on the device** (AsyncStorage). Reopening the app the same day resumes exactly; on a new day you keep XP, levels and the cleared fog, get a fresh quest batch, and the streak, Form and rested pool roll over.
@@ -32,8 +34,10 @@ npx expo run:ios                                     # or run:android
 | Path | What |
 |---|---|
 | `src/game/session.ts` | Pure game state: award preview, quest gates, completion, walking, HUD view model |
+| `src/game/onboarding.ts` | Answers to a new player via `calibrate()` |
 | `src/game/persist.ts` | Save/restore and the new-day rollover (pure; the hook does the storage I/O) |
 | `src/game/mock-world.ts` | Seed player, waypoints and a quest batch that passes the generator's schema and `validateBatch()` |
+| `src/ui/onboarding/` | Character creation screens |
 | `src/ui/` | `GameScreen`, `HudHeader`, `XpBar`, `QuestList`, `Toast` |
 | `src/ui/map/` | `PlaceholderMap` (SVG), `MapboxMap` (native), shared props |
 | `metro.config.js` | Watches `../src` and resolves its imports from this app's `node_modules` |

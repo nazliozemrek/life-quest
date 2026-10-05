@@ -2,7 +2,9 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Location from "expo-location";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Fix } from "../../../src/spatial/spatial-engine";
+import type { OnboardingAnswers } from "../../../src/onboarding/calibration";
 import { createSession } from "../game/mock-world";
+import { CREATION_QUEST, startGame } from "../game/onboarding";
 import { SAVE_KEY, dayKey, restore, serialize } from "../game/persist";
 import { applyFixes, completeQuest, planWalk, spawnAt, type Session } from "../game/session";
 import type { LatLng } from "./map/types";
@@ -130,5 +132,12 @@ export function useGameSession() {
     emit({ kind: "xp", xp: r.award.totalXp, title, levelUp: r.levelUp?.to ?? null });
   }, [commit, emit]);
 
-  return { session, event, mode, walkTo, complete };
+  /** Finish character creation: the new player replaces the seed one, and the tutorial quest pays out. */
+  const begin = useCallback((name: string, answers: OnboardingAnswers) => {
+    const r = startGame(latest.current, name, answers);
+    commit(r.session);
+    emit({ kind: "xp", xp: CREATION_QUEST.xp, title: CREATION_QUEST.title, levelUp: r.levelUp?.to ?? null });
+  }, [commit, emit]);
+
+  return { session, loaded, event, mode, walkTo, complete, begin };
 }

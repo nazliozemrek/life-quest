@@ -6,6 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import type { Quest } from "../../../src/quests/quest-generator";
 import { hud as toHud, previewAward, questGate } from "../game/session";
 import { HudHeader } from "./HudHeader";
+import { Onboarding } from "./onboarding/Onboarding";
 import { PlaceholderMap } from "./map/PlaceholderMap";
 import type { LatLng, MapViewProps } from "./map/types";
 import { QuestList, type QuestRowModel } from "./QuestList";
@@ -17,7 +18,15 @@ const MapboxMap = lazy(() => import("./map/MapboxMap"));
 const USE_MAPBOX = !!process.env.EXPO_PUBLIC_MAPBOX_TOKEN && Platform.OS !== "web" && !isRunningInExpoGo();
 
 export function GameScreen() {
-  const { session, event, mode, walkTo, complete } = useGameSession();
+  const game = useGameSession();
+  // Blank until the save is read, so a returning player never sees character creation flash past.
+  if (!game.loaded) return <View style={styles.screen} />;
+  if (!game.session.player.profile) return <Onboarding onDone={game.begin} />;
+  return <World game={game} />;
+}
+
+function World({ game }: { game: ReturnType<typeof useGameSession> }) {
+  const { session, event, mode, walkTo, complete } = game;
   const [focused, setFocused] = useState<Quest | null>(null);
   const hud = useMemo(() => toHud(session), [session]);
 
@@ -71,7 +80,7 @@ export function GameScreen() {
       )}
 
       <SafeAreaView edges={["top"]} pointerEvents="box-none">
-        <HudHeader hud={hud} name={session.player.name} />
+        <HudHeader hud={hud} player={session.player} />
         <View style={styles.chips} pointerEvents="none">
           <View style={styles.chip}>
             <Text style={styles.chipText} numberOfLines={1}>

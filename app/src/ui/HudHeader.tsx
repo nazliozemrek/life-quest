@@ -1,9 +1,12 @@
 import { StyleSheet, Text, View } from "react-native";
-import type { Hud } from "../game/session";
+import type { Hud, Player } from "../game/session";
 import { color, skillColor, skillLabel } from "./theme";
 import { XpBar } from "./XpBar";
 
-export function HudHeader({ hud, name }: { hud: Hud; name: string }) {
+const CLASS_NAME = { warrior: "Warrior", artisan: "Artisan", merchant: "Merchant", bard: "Bard", sage: "Sage" } as const;
+
+export function HudHeader({ hud, player }: { hud: Hud; player: Player }) {
+  const cls = player.profile && CLASS_NAME[player.profile.className];
   return (
     <View style={styles.panel}>
       <View style={styles.row}>
@@ -13,7 +16,9 @@ export function HudHeader({ hud, name }: { hud: Hud; name: string }) {
         </View>
         <View style={styles.main}>
           <View style={styles.titleRow}>
-            <Text style={styles.name}>{name}</Text>
+            <Text style={styles.name} numberOfLines={1}>
+              {player.name}{cls && <Text style={styles.cls}>  {cls}</Text>}
+            </Text>
             <Text style={styles.streak}>
               {hud.streakDays}-day streak <Text style={styles.mult}>×{hud.streakMult.toFixed(2)}</Text>
             </Text>
@@ -52,7 +57,8 @@ const styles = StyleSheet.create({
   badgeLevel: { color: color.text, fontSize: 20, fontWeight: "800", marginTop: -2, fontVariant: ["tabular-nums"] },
   main: { flex: 1, gap: 6 },
   titleRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" },
-  name: { color: color.text, fontSize: 16, fontWeight: "700" },
+  name: { color: color.text, fontSize: 16, fontWeight: "700", flexShrink: 1, marginRight: 8 },
+  cls: { color: color.textDim, fontSize: 12, fontWeight: "600" },
   streak: { color: color.textDim, fontSize: 12 },
   mult: { color: color.xp, fontWeight: "700" },
   skills: { flexDirection: "row", gap: 6, marginTop: 10 },

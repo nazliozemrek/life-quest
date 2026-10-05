@@ -10,6 +10,7 @@ import {
   DISTRICT_MILESTONES, FOG_RES, districtOf, districtProgress, revealCells, validateFixes, type Fix,
 } from "../../../src/spatial/spatial-engine";
 import type { Quest } from "../../../src/quests/quest-generator";
+import { CLASSES, type ClassCode, type OnboardingAnswers } from "../../../src/onboarding/calibration";
 
 export const SKILLS: readonly SkillCode[] = ["vitality", "craft", "wealth", "charisma", "mindset"];
 
@@ -17,13 +18,28 @@ export interface Waypoint { id: string; kind: string; name: string; lat: number;
 
 export interface SkillState { xp: number; idleDays: number; earnedToday: number }
 
+/** Who the player told us they are at character creation. Absent until onboarding is finished. */
+export interface Profile {
+  calibrationVersion: number;
+  className: ClassCode;
+  classNode: string;
+  calibratedMode: DifficultyMode;
+  rulesMode: DifficultyMode;         // streak and decay rules; `difficulty` below is the XP mode
+  lifeLoad: number;
+  constraints: string[];             // pillar 3 PlayerContext.constraints
+  targetEffort: number;
+  answers: OnboardingAnswers;        // device only, so recalibration can re-open them; the server gets derived values
+  createdAt: number;
+}
+
 export interface Player {
   name: string;
-  difficulty: DifficultyMode;
+  difficulty: DifficultyMode;        // XP multiplier mode (pillar 4 xpMode)
   totalXp: number;
   rested: number;
   streakDays: number;
   skills: Record<SkillCode, SkillState>;
+  profile?: Profile;
 }
 
 export interface QuestEntry { quest: Quest; status: "open" | "done"; awardedXp?: number }
@@ -61,8 +77,21 @@ function awardInput(s: Session, q: Quest): AwardInput {
 
 /** What completing this quest would pay right now. Shown on the card; the server re-prices on submit. */
 export function previewAward(s: Session, q: Quest): AwardResult {
-  return computeAward(awardInput(s, q));
+  const r = computeAward(awardInput(s, q));
+  // The class's starting skill node: {"xp_mult": {<class skill>: 0.05}} on that skill's share (pillar 4 §2 B).
+  const skill = s.player.profile && CLASSES[s.player.profile.className].skill;
+  const base = skill ? r.perSkill[skill] : undefined;
+  if (!skill || !base) return r;
+  const bonus = Math.floor(base * CLASS_NODE_MULT);
+  return {
+    ...r,
+    totalXp: r.totalXp + bonus,
+    perSkill: { ...r.perSkill, [skill]: base + bonus },
+    multipliers: { ...r.multipliers, classNode: 1 + CLASS_NODE_MULT },
+  };
 }
+
+const CLASS_NODE_MULT = 0.05;
 
 export type Gate = { ok: true } | { ok: false; reason: string };
 

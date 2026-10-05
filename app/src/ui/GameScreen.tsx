@@ -105,6 +105,9 @@ const styles = StyleSheet.create({
   },
   chipStrong: { color: color.xp, fontSize: 12, fontWeight: "700" },
   chipText: { color: color.textDim, fontSize: 12 },
-  hint: { color: color.textFaint, fontSize: 11, marginLeft: 8, flexShrink: 0 },
+  hint: {
+    color: color.textDim, fontSize: 11, marginLeft: 8, flexShrink: 0, overflow: "hidden",
+    paddingVertical: 4, paddingHorizontal: 8, borderRadius: 999, backgroundColor: color.panel,
+  },
   sheet: { position: "absolute", left: 0, right: 0, bottom: 0, top: 0, justifyContent: "flex-end" },
 });

@@ -49,7 +49,10 @@ export default function MapboxMap({ explored, position, waypoints, districts, fo
       <Camera centerCoordinate={[center.lng, center.lat]} zoomLevel={15.5} animationMode="easeTo" animationDuration={300} />
 
       <ShapeSource id="fog" shape={fog}>
-        <FillLayer id="fog-fill" style={{ fillColor: color.fog, fillAntialias: true }} />
+        {/* dark-v11 is already near-black, so the fog has to be almost opaque to read, and the explored edge
+            gets a faint gold line so the frontier is visible at a glance. */}
+        <FillLayer id="fog-fill" style={{ fillColor: "#03050A", fillOpacity: 0.93, fillAntialias: true }} />
+        <LineLayer id="fog-edge" style={{ lineColor: color.district, lineWidth: 1.2, lineOpacity: 0.6, lineBlur: 1 }} />
       </ShapeSource>
 
       <ShapeSource id="districts" shape={districtShapes}>

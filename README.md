@@ -2,7 +2,7 @@
 
 A mobile app that turns real life into an open-world RPG: real goals become quests, your city becomes a map with fog of war, and your life's difficulty sets the game's difficulty.
 
-This repo holds the core game engines and database schema. There's no app client yet.
+This repo holds the core game engines, the database schema, and the Expo app in [app/](app/README.md).
 
 ## What's here
 
@@ -12,6 +12,7 @@ This repo holds the core game engines and database schema. There's no app client
 | 2. Spatial: geofencing, fog of war, anti-spoofing | [docs/pillar-2-spatial.md](docs/pillar-2-spatial.md) | [src/spatial/spatial-engine.ts](src/spatial/spatial-engine.ts) |
 | 3. AI quest generator (Claude, strict JSON) | [docs/pillar-3-ai-quest-generator.md](docs/pillar-3-ai-quest-generator.md) | [src/quests/quest-generator.ts](src/quests/quest-generator.ts) |
 | 4. Onboarding & difficulty calibration | [docs/pillar-4-onboarding-calibration.md](docs/pillar-4-onboarding-calibration.md) | [src/onboarding/calibration.ts](src/onboarding/calibration.ts) |
+| App: first screen (map HUD, XP bar, quest log) | [app/README.md](app/README.md) | [app/src](app/src) |
 
 Database: PostgreSQL 16 with PostGIS and h3-pg. Migrations are in [db/migrations](db/migrations), applied in filename order.
 

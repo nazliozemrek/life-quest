@@ -3,5 +3,5 @@
   "compilerOptions": {
     "strict": true
   },
-  "include": ["App.tsx", "index.ts", "src", "test", "expo-env.d.ts"]
+  "include": ["App.tsx", "index.ts", "polyfills.ts", "src", "test", "expo-env.d.ts"]
 }

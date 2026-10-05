@@ -83,7 +83,7 @@ function QuestRow({ row, onComplete, onLocate }: { row: QuestRowModel } & Pick<P
             accessibilityState={{ disabled: !row.gate.ok }}
             hitSlop={8}
           >
-            <Text style={[styles.buttonText, !row.gate.ok && styles.buttonTextLocked]}>Complete</Text>
+            <Text style={[styles.buttonText, !row.gate.ok && styles.buttonTextLocked]} numberOfLines={1}>Complete</Text>
           </Pressable>
         )}
       </View>
@@ -115,7 +115,7 @@ const styles = StyleSheet.create({
   metaDot: { color: color.textFaint, fontSize: 11 },
   skillTag: { fontSize: 10, fontWeight: "800", marginLeft: 4 },
   blocked: { color: color.xp, fontSize: 11, marginTop: 2 },
-  side: { width: 86, alignItems: "flex-end", justifyContent: "center", paddingRight: 10, gap: 2 },
+  side: { width: 100, alignItems: "flex-end", justifyContent: "center", paddingRight: 10, gap: 2 },
   xp: { color: color.xp, fontSize: 18, fontWeight: "800", fontVariant: ["tabular-nums"] },
   xpDone: { color: color.good },
   xpUnit: { color: color.textFaint, fontSize: 10, marginTop: -4 },

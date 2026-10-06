@@ -168,7 +168,11 @@ export function validateBatch(batch: QuestBatch, ctx: PlayerContext): { quests: 
     const sum = q.skill_weights.reduce((s, w) => s + w.weight, 0);
     if (sum <= 0) { bad("skill_weights sum to 0"); continue; }
     if (Math.abs(sum - 1) > 0.05) bad(`skill_weights summed to ${sum.toFixed(2)}, renormalized`, false);
-    const skillWeights = q.skill_weights.map(w => ({ ...w, weight: w.weight / sum }));
+    // A skill named twice is merged, so the weights stay one per skill and still sum to 1.
+    const merged = new Map<string, number>();
+    for (const w of q.skill_weights) merged.set(w.skill, (merged.get(w.skill) ?? 0) + w.weight);
+    if (merged.size < q.skill_weights.length) bad("skill named twice in skill_weights, merged", false);
+    const skillWeights = [...merged].map(([skill, weight]) => ({ skill: skill as Quest["skill_weights"][number]["skill"], weight: weight / sum }));
 
     if (q.location.type === "waypoint" && !waypointIds.has(q.location.ref ?? "")) { bad("unknown waypoint"); continue; }
     if (q.location.type === "district" && !districtIds.has(q.location.ref ?? "")) { bad("unknown district"); continue; }

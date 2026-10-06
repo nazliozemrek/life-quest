@@ -97,10 +97,10 @@ export const OVER_CAP_RATE = 0.2;
 
 // ---------- Rested XP ----------
 
-/** Rested pool grows 5% of the current level's requirement per idle day, max 150%. */
+/** Rested pool grows 5% of the current level's requirement per idle day, max 150%. Whole XP only: the ledger stores ints. */
 export function accrueRested(pool: number, idleDays: number, playerLevel: number): number {
   const need = xpToNext(playerLevel);
-  return Math.min(1.5 * need, pool + 0.05 * need * Math.max(0, idleDays));
+  return Math.floor(Math.min(1.5 * need, pool + 0.05 * need * Math.max(0, idleDays)));
 }
 
 // ---------- Award ----------
@@ -151,7 +151,7 @@ export function computeAward(i: AwardInput): AwardResult {
   }
 
   // Rested doubles XP until the pool is drained (bonus only, never affects skill caps).
-  const restedConsumed = Math.min(i.rested, net);
+  const restedConsumed = Math.floor(Math.min(i.rested, net));
   return {
     totalXp: net + restedConsumed,
     perSkill,

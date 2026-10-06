@@ -1,0 +1,22 @@
+# Supabase CLI config for Life Quest. Link to the hosted project with `npx supabase link --project-ref <ref>`.
+project_id = "life-quest"
+
+[auth]
+# The app signs players in anonymously on first launch, so progress syncs before anyone makes an account.
+enable_anonymous_sign_ins = true
+
+[functions.daily-quests]
+verify_jwt = true
+
+# Backup and restore use 6-digit email codes, typed in the app (no links, no deep linking).
+# Apply to the hosted project with `npx supabase config push` (review the diff: it should only touch these).
+[auth.email]
+otp_length = 6
+
+[auth.email.template.magic_link]
+subject = "Your Life Quest code"
+content_path = "./supabase/templates/magic_link.html"
+
+[auth.email.template.email_change]
+subject = "Back up your Life Quest character"
+content_path = "./supabase/templates/email_change.html"

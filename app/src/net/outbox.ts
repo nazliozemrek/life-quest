@@ -1,0 +1,130 @@
+// Offline-first sync. The game never waits on the network: every change that the server should know about is
+// queued here (and saved with the game), then flushed in order whenever the player is signed in and online.
+// Every write is idempotent (ledger keys, upserts), so a flush that dies halfway is simply retried.
+import type { AwardResult } from "../../../src/xp/xp-engine";
+import { CURVE_VERSION } from "../../../src/xp/xp-engine";
+import { districtOf } from "../../../src/spatial/spatial-engine";
+import type { Calibration } from "../game/onboarding";
+import type { Player } from "../game/session";
+import type { Goal } from "../game/setup";
+
+export type SyncOp =
+  | { op: "profile"; player: Pick<Player, "name" | "difficulty"> & { profile: NonNullable<Player["profile"]> } }
+  | { op: "xp"; key: string; source: "quest" | "backstory" | "creation"; title: string | null; xp: number;
+      split: Record<string, number>; rested: number; multipliers: Record<string, number> }
+  | { op: "goals"; goals: Goal[] }
+  | { op: "node"; id: string };
+
+export function profileOp(p: Player): SyncOp | null {
+  return p.profile ? { op: "profile", player: { name: p.name, difficulty: p.difficulty, profile: p.profile } } : null;
+}
+
+export function questOp(day: string, localId: string, title: string, award: AwardResult): SyncOp {
+  return {
+    op: "xp", key: `quest:${day}:${localId}`, source: "quest", title, xp: award.totalXp,
+    split: award.perSkill as Record<string, number>, rested: award.restedConsumed, multipliers: award.multipliers,
+  };
+}
+
+/** Starting XP from character creation, as two ledger rows: backstory (per skill) and the tutorial quest. */
+export function creationOps(c: Calibration, creationXp: number): SyncOp[] {
+  return [
+    { op: "xp", key: "backstory", source: "backstory", title: "Backstory", xp: c.backstory.total,
+      split: c.backstory.perSkill, rested: 0, multipliers: {} },
+    { op: "xp", key: "creation", source: "creation", title: "Complete character creation", xp: creationXp,
+      split: {}, rested: 0, multipliers: {} },
+  ];
+}
+
+/** The player's active goals, replacing what the server has. Finished ones live on as ledger rows. */
+export function goalsOp(goals: Goal[]): SyncOp {
+  return { op: "goals", goals: goals.filter(g => !g.doneAt).map(({ id, title, horizon, skill }) => ({ id, title, horizon, skill })) };
+}
+
+/** A finished main quest. The key carries the horizon, so the server can make its feed card without the title. */
+export function goalOp(g: Goal, xp: number, split: Record<string, number>): SyncOp {
+  return { op: "xp", key: `goal:${g.horizon}:${g.id}`, source: "quest", title: g.title, xp, split, rested: 0, multipliers: {} };
+}
+
+/** A skill tree node the player bought. Idempotent: re-sending one is a no-op. */
+export function nodeOp(id: string): SyncOp {
+  return { op: "node", id };
+}
+
+/** The slice of the Supabase client the flush uses, so tests can pass a recorder. */
+export interface Db {
+  from(table: string): {
+    upsert(rows: object | object[], opts?: { onConflict?: string; ignoreDuplicates?: boolean }): PromiseLike<{ error: unknown }>;
+    insert(rows: object | object[]): PromiseLike<{ error: unknown }>;
+    delete(): { like(column: string, pattern: string): PromiseLike<{ error: unknown }> };
+  };
+}
+
+const CELL_CHUNK = 500;
+
+/**
+ * Errors no retry can fix: bad data (Postgres class 22), a value a check refuses (23514), a missing required value
+ * (23502). Anything else, including a missing player row (23503) or a dropped connection, is retried later.
+ */
+export function isPermanent(error: unknown): boolean {
+  const code = (error as { code?: unknown } | null)?.code;
+  return typeof code === "string" && (code.startsWith("22") || code === "23514" || code === "23502");
+}
+
+/**
+ * Send queued ops in order, then any explored cells the server hasn't seen. Stops at the first failure and
+ * returns what's left, so order is kept (the player row must exist before ledger rows reference it).
+ */
+export async function flush(
+  db: Db, ops: SyncOp[], explored: ReadonlySet<string>, synced: ReadonlySet<string>,
+): Promise<{ remaining: SyncOp[]; synced: Set<string> }> {
+  const done = new Set(synced);
+  let i = 0;
+  for (; i < ops.length; i++) {
+    const o = ops[i];
+    const { error } = o.op === "profile" ? await sendProfile(db, o) : o.op === "goals" ? await sendGoals(db, o.goals)
+      : o.op === "node" ? await db.from("player_skill_nodes").upsert({ node_id: o.id }, { onConflict: "player_id,node_id", ignoreDuplicates: true })
+      : await db.from("xp_ledger").upsert({
+      // Whole numbers: older builds could queue rested XP with decimals, which an int column refuses forever.
+      idempotency_key: o.key, source: o.source, title: o.title, final_xp: Math.floor(o.xp),
+      skill_split: Object.fromEntries(Object.entries(o.split).map(([k, v]) => [k, Math.floor(v)])),
+      rested_consumed: Math.floor(o.rested), multipliers: o.multipliers, curve_version: CURVE_VERSION,
+    }, { onConflict: "player_id,idempotency_key", ignoreDuplicates: true });
+    if (error && isPermanent(error)) continue;     // a row the server will never take: skip it, don't block the rest
+    if (error) return { remaining: ops.slice(i), synced: done };
+  }
+  // Cells only once the player row exists, i.e. nothing is stuck in the queue.
+  const pending = [...explored].filter(c => !done.has(c));
+  for (let k = 0; k < pending.length; k += CELL_CHUNK) {
+    const chunk = pending.slice(k, k + CELL_CHUNK);
+    const { error } = await db.from("player_explored_cells").upsert(
+      chunk.map(cell => ({ cell, district: districtOf(cell) })),
+      { onConflict: "player_id,cell", ignoreDuplicates: true },
+    );
+    if (error) break;
+    chunk.forEach(c => done.add(c));
+  }
+  return { remaining: [], synced: done };
+}
+
+async function sendProfile(db: Db, o: Extract<SyncOp, { op: "profile" }>): Promise<{ error: unknown }> {
+  const pr = o.player.profile;
+  const player = await db.from("players").upsert({
+    handle: o.player.name, class: pr.className, difficulty: o.player.difficulty, rules_mode: pr.rulesMode,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC",
+  }, { onConflict: "id" });
+  if (player.error) return player;
+  // Derived values only; the raw answers stay on the phone.
+  return db.from("calibrations").insert({
+    version: pr.calibrationVersion, trigger: "onboarding", life_load: pr.lifeLoad, calibrated_mode: pr.calibratedMode,
+    rules_mode: pr.rulesMode, xp_mode: o.player.difficulty, constraint_tags: pr.constraints, target_effort: pr.targetEffort,
+  });
+}
+
+/** Delete then insert: not atomic, but a failure leaves the op queued and the retry ends in the same state. */
+async function sendGoals(db: Db, goals: Goal[]): Promise<{ error: unknown }> {
+  // Supabase refuses a DELETE with no filter; every id matches '%', and RLS keeps it to this player's rows.
+  const del = await db.from("player_goals").delete().like("id", "%");
+  if (del.error || !goals.length) return del;
+  return db.from("player_goals").insert(goals);
+}

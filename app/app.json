@@ -1,0 +1,40 @@
+{
+  "expo": {
+    "name": "Life Quest",
+    "slug": "life-quest",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.lifequest.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0B0E14",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.lifequest.app"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "./plugins/withoutPushEntitlement",
+      "@rnmapbox/maps",
+      "expo-status-bar",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Life Quest reveals the map where you walk and checks you in at quest locations."
+        }
+      ],
+      "expo-localization"
+    ],
+    "backgroundColor": "#0B0E14"
+  }
+}

@@ -6,7 +6,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { CLASSES } from "../../../../src/onboarding/calibration";
 import { playerLevels, skillLevels, type SkillCode } from "../../../../src/xp/xp-engine";
 import { SKILLS, type Player, type Session } from "../../game/session";
-import { type Goal, type Place, type PlaceKind } from "../../game/setup";
+import { activeGoals, type Goal, type Place, type PlaceKind } from "../../game/setup";
+import { MAIN_QUEST_XP, finishBlocker } from "../../game/mainquest";
+import { dayKey } from "../../game/persist";
 import {
   NODES, TREES, canUnlock, nodeState, points, titles, xpBonus, type SkillNode,
 } from "../../game/skilltree";
@@ -24,9 +26,10 @@ export interface ProfileProps {
   onUnlock(id: string): void;
   onTitle(title: string | null): void;
   onEditSetup(goals: Goal[], places: Place[]): void;
+  onFinishGoal(id: string): void;
 }
 
-export function Profile({ session, onClose, onUnlock, onTitle, onEditSetup }: ProfileProps) {
+export function Profile({ session, onClose, onUnlock, onTitle, onEditSetup, onFinishGoal }: ProfileProps) {
   const { t, settings, update } = useSettings();
   const p = session.player;
   const classSkill = p.profile ? CLASSES[p.profile.className].skill : "vitality";
@@ -42,7 +45,7 @@ export function Profile({ session, onClose, onUnlock, onTitle, onEditSetup }: Pr
   if (editing) {
     return (
       <SetupFlow explored={session.explored} position={session.position}
-        initialGoals={p.profile?.goals ?? []} initialPlaces={places} onCancel={() => setEditing(false)}
+        initialGoals={activeGoals(p.profile?.goals)} initialPlaces={places} onCancel={() => setEditing(false)}
         onDone={(g, pl) => { onEditSetup(g, pl); setEditing(false); }} />
     );
   }
@@ -50,7 +53,8 @@ export function Profile({ session, onClose, onUnlock, onTitle, onEditSetup }: Pr
   const level = playerLevels.progress(p.totalXp);
   const cls = p.profile ? t(`class.${p.profile.className}`) : null;
   const owned = titles(p);
-  const goals = p.profile?.goals ?? [];
+  const goals = activeGoals(p.profile?.goals);
+  const finished = (p.profile?.goals ?? []).filter(g => g.doneAt);
 
   return (
     <SafeAreaView style={styles.screen} edges={["top", "bottom"]}>
@@ -85,13 +89,20 @@ export function Profile({ session, onClose, onUnlock, onTitle, onEditSetup }: Pr
         )}
 
         <Section title={t("profile.goals")} action={{ label: t("profile.edit"), onPress: () => setEditing(true) }}>
-          {goals.length ? goals.map(g => (
-            <View key={g.id} style={styles.goal}>
-              <View style={[styles.goalDot, { backgroundColor: g.skill ? skillColor[g.skill] : color.xp }]} />
-              <Text style={styles.goalTitle} numberOfLines={1}>{t.p(g.title)}</Text>
-              <Text style={styles.goalHorizon}>{t(`horizon.${g.horizon}`)}</Text>
+          {goals.length ? goals.map(g => <GoalRow key={g.id} goal={g} onFinish={() => onFinishGoal(g.id)} />)
+            : <Text style={styles.empty}>{t(finished.length ? "goal.pickNext" : "profile.noGoals")}</Text>}
+          {finished.length > 0 && (
+            <View style={styles.finished}>
+              <Text style={styles.finishedHead}>{t("goal.completed")}</Text>
+              {finished.slice().reverse().map(g => (
+                <View key={g.id} style={styles.goal}>
+                  <Text style={styles.check}>✓</Text>
+                  <Text style={[styles.goalTitle, styles.goalDone]} numberOfLines={1}>{t.p(g.title)}</Text>
+                  <Text style={styles.goalHorizon}>+{MAIN_QUEST_XP[g.horizon]} XP</Text>
+                </View>
+              ))}
             </View>
-          )) : <Text style={styles.empty}>{t("profile.noGoals")}</Text>}
+          )}
           <Text style={styles.places}>
             {places.length ? t("profile.places", { list: places.map(x => t(`place.${x.kind}`)).join(", ") }) : t("profile.noPlaces")}
           </Text>
@@ -236,6 +247,50 @@ function Pill({ label, on, onPress }: { label: string; on: boolean; onPress(): v
   );
 }
 
+/** An active main quest: tap "Done" to claim it, then confirm. Too-new goals say how many days are left. */
+function GoalRow({ goal, onFinish }: { goal: Goal; onFinish(): void }) {
+  const t = useT();
+  const [asking, setAsking] = useState(false);
+  const blocked = finishBlocker(goal, dayKey(new Date()));
+  const xp = MAIN_QUEST_XP[goal.horizon];
+  const tint = goal.skill ? skillColor[goal.skill] : color.xp;
+  return (
+    <View style={[styles.goalBox, asking && { borderColor: tint }]}>
+      <View style={styles.goal}>
+        <View style={[styles.goalDot, { backgroundColor: tint }]} />
+        <Text style={styles.goalTitle} numberOfLines={1}>{t.p(goal.title)}</Text>
+        <Text style={styles.goalHorizon}>{t(`horizon.${goal.horizon}`)}</Text>
+        <Pressable onPress={() => setAsking(a => !a)} hitSlop={8} accessibilityRole="button"
+          accessibilityLabel={t("goal.doneA11y", { goal: t.p(goal.title) })} style={styles.doneBtn}>
+          <Text style={styles.doneText}>{t("goal.doneBtn")}</Text>
+        </Pressable>
+      </View>
+      {asking && (
+        <View style={styles.ask}>
+          {blocked ? (
+            <Text style={styles.askText}>{say(t, blocked)}</Text>
+          ) : (
+            <>
+              <Text style={styles.askText}>
+                {t("goal.ask", { xp, skill: goal.skill ? t(`skill.${goal.skill}`) : t("goal.allSkills") })}
+              </Text>
+              <View style={styles.askRow}>
+                <Pressable onPress={() => setAsking(false)} style={styles.askNo} accessibilityRole="button">
+                  <Text style={styles.askNoText}>{t("goal.notYet")}</Text>
+                </Pressable>
+                <Pressable onPress={() => { setAsking(false); onFinish(); }} accessibilityRole="button"
+                  style={[styles.askYes, { backgroundColor: tint }]}>
+                  <Text style={styles.askYesText}>{t("goal.claim", { xp })}</Text>
+                </Pressable>
+              </View>
+            </>
+          )}
+        </View>
+      )}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: color.bg },
   fill: { flex: 1 },
@@ -269,6 +324,20 @@ const styles = StyleSheet.create({
   goalDot: { width: 8, height: 8, borderRadius: 4 },
   goalTitle: { color: color.text, fontSize: 15, flex: 1 },
   goalHorizon: { color: color.textDim, fontSize: 12 },
+  goalBox: { borderRadius: 12, borderWidth: 1, borderColor: "transparent", marginHorizontal: -8, paddingHorizontal: 8, paddingVertical: 4 },
+  doneBtn: { paddingVertical: 4, paddingHorizontal: 10, borderRadius: 999, borderWidth: 1, borderColor: "rgba(245,196,81,0.5)" },
+  doneText: { color: color.xp, fontSize: 12, fontWeight: "700" },
+  ask: { marginTop: 10, gap: 10 },
+  askText: { color: color.textDim, fontSize: 14, lineHeight: 19 },
+  askRow: { flexDirection: "row", gap: 8 },
+  askNo: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: "center", backgroundColor: color.track },
+  askNoText: { color: color.text, fontSize: 14, fontWeight: "600" },
+  askYes: { flex: 2, paddingVertical: 10, borderRadius: 10, alignItems: "center" },
+  askYesText: { color: color.bg, fontSize: 14, fontWeight: "800" },
+  finished: { marginTop: 6, gap: 6 },
+  finishedHead: { color: color.textFaint, fontSize: 11, fontWeight: "700", letterSpacing: 1, textTransform: "uppercase" },
+  check: { color: color.good, fontSize: 14, fontWeight: "800", width: 8 + 2 },
+  goalDone: { color: color.textDim, textDecorationLine: "line-through" },
   settingLabel: { color: color.textDim, fontSize: 12, fontWeight: "700", letterSpacing: 0.5, marginTop: 2 },
   empty: { color: color.textDim, fontSize: 14 },
   places: { color: color.textDim, fontSize: 12 },

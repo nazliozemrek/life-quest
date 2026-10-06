@@ -5,7 +5,14 @@ import type { SkillCode } from "../../../src/xp/xp-engine";
 import type { Session, Waypoint } from "./session";
 
 export type Horizon = "week" | "month" | "year";
-export interface Goal { id: string; title: string; horizon: Horizon; skill: SkillCode | null }
+export interface Goal {
+  id: string; title: string; horizon: Horizon; skill: SkillCode | null;
+  createdAt?: string;                // local day it was picked; finishing waits a few days (mainquest.ts)
+  doneAt?: string;                   // local day it was finished; done goals stay as a record, outside the 3 slots
+}
+
+/** The goals still being worked on. */
+export const activeGoals = (goals: Goal[] | undefined) => (goals ?? []).filter(g => !g.doneAt);
 
 export const GOAL_SUGGESTIONS: { title: string; skill: SkillCode }[] = [
   { title: "Run a 5K", skill: "vitality" },
@@ -38,13 +45,24 @@ export function placeWaypoints(places: Place[]): Waypoint[] {
   }));
 }
 
-/** Apply goals and places to a player who already has a character (also the last step of character creation). */
-export function applySetup(s: Session, goals: Goal[], places: Place[]): Session {
+/**
+ * Apply goals and places to a player who already has a character (also the last step of character creation).
+ * `goals` is the new active list; finished goals are kept as they were, and a goal keeps its start day across edits.
+ */
+export function applySetup(s: Session, goals: Goal[], places: Place[], today = localDay(new Date())): Session {
   const profile = s.player.profile;
   if (!profile) return s;
+  const before = profile.goals ?? [];
+  const active = goals.filter(g => !g.doneAt).slice(0, MAX_GOALS)
+    .map(g => ({ ...g, createdAt: g.createdAt ?? before.find(b => b.id === g.id)?.createdAt ?? today }));
+  const done = before.filter(g => g.doneAt && !active.some(a => a.id === g.id)).slice(-10);
   return {
     ...s,
     waypoints: placeWaypoints(places),
-    player: { ...s.player, profile: { ...profile, goals: goals.slice(0, MAX_GOALS), setupDone: true } },
+    player: { ...s.player, profile: { ...profile, goals: [...active, ...done], setupDone: true } },
   };
+}
+
+function localDay(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }

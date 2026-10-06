@@ -59,9 +59,14 @@ export function restore(
   if (!isSavedGame(saved)) return base;
 
   const gap = daysBetween(saved.day, today);
+  // Goals from before goals had a start day count from this save's day.
+  const prof = saved.player.profile;
+  const player = prof?.goals?.some(g => !g.createdAt)
+    ? { ...saved.player, profile: { ...prof, goals: prof.goals.map(g => ({ ...g, createdAt: g.createdAt ?? saved.day })) } }
+    : saved.player;
   const kept: Session = {
     ...base,
-    player: saved.player,
+    player,
     explored: new Set(saved.explored),
     position: saved.position,
     ...(saved.waypoints ? { waypoints: saved.waypoints } : {}),
@@ -69,7 +74,7 @@ export function restore(
   // Same day, or the clock went backwards: resume as saved.
   if (gap <= 0) return { ...kept, quests: saved.quests, newCells: new Set(saved.newCells) };
 
-  const p = saved.player;
+  const p = player;
   const playedLastDay = saved.quests.some(e => e.status === "done");
   const skills = {} as Player["skills"];
   for (const code of SKILLS as SkillCode[]) {

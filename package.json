@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "db:test": "bash db/run-migrations.sh && psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -q -f db/tests/smoke.sql",
-    "supabase:test": "psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -q -f supabase/tests/supabase-stub.sql -f supabase/migrations/20261005170000_life_quest_v1.sql -f supabase/migrations/20261005180000_goals.sql -f supabase/migrations/20261005190000_skill_nodes.sql -f supabase/migrations/20261005200000_player_saves.sql -f supabase/migrations/20261006090000_social.sql -f supabase/tests/rls.sql -f supabase/tests/social.sql"
+    "supabase:test": "psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -q -f supabase/tests/supabase-stub.sql -f supabase/migrations/20261005170000_life_quest_v1.sql -f supabase/migrations/20261005180000_goals.sql -f supabase/migrations/20261005190000_skill_nodes.sql -f supabase/migrations/20261005200000_player_saves.sql -f supabase/migrations/20261006090000_social.sql -f supabase/migrations/20261006100000_main_quest_feed.sql -f supabase/tests/rls.sql -f supabase/tests/social.sql"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",

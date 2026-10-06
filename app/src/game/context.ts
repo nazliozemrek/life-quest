@@ -7,6 +7,7 @@ import { DISTRICT_RES, districtOf } from "../../../src/spatial/spatial-engine";
 import { playerLevels, skillForm, skillLevels } from "../../../src/xp/xp-engine";
 import { SKILLS, type QuestEntry, type Session } from "./session";
 import { focusSkills as treeFocus } from "./skilltree";
+import { activeGoals } from "./setup";
 
 export const DAILY_COUNT = 6;
 const CELLS_PER_DISTRICT = 343;
@@ -48,7 +49,7 @@ export function playerContext(s: Session, now: Date): Omit<PlayerContext, "playe
     skills,
     streakDays: p.streakDays,
     constraints: p.profile?.constraints ?? [],
-    goals: (p.profile?.goals ?? []).map(g => ({ id: g.id, title: g.title, horizon: g.horizon })),
+    goals: activeGoals(p.profile?.goals).map(g => ({ id: g.id, title: g.title, horizon: g.horizon })),
     completionRate14d: {},
     targetEffort: p.profile?.targetEffort ?? 1,
     recentQuestTitles: s.quests.map(e => e.quest.title),
@@ -64,7 +65,7 @@ export function poolQuests(s: Session, day: string): QuestEntry[] {
   const ctx = playerContext(s, new Date());
   const seed = `${s.player.profile?.createdAt ?? "guest"}:${day}`;
   // Goals first, then skills whose tree Path says so.
-  const focus = [...(s.player.profile?.goals ?? []).flatMap(g => (g.skill ? [g.skill] : [])), ...treeFocus(s.player)];
+  const focus = [...activeGoals(s.player.profile?.goals).flatMap(g => (g.skill ? [g.skill] : [])), ...treeFocus(s.player)];
   const focusSkills = [...new Set(focus)];
   return pickDailySet(ctx, seed, DAILY_COUNT, { focusSkills }).map(quest => ({ quest, status: "open" as const }));
 }

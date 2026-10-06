@@ -317,7 +317,7 @@ function FeedCard({ item, onGive }: { item: FeedItem; onGive(id: string): Promis
       </View>
       <View style={styles.milestone}>
         <View style={[styles.icon, { backgroundColor: `${tint}2E` }]}>
-          <Text style={[styles.iconText, { color: tint }]}>{item.event.kind === "level_up" ? "▲" : item.event.kind === "district" ? "◈" : "✦"}</Text>
+          <Text style={[styles.iconText, { color: tint }]}>{item.event.kind === "level_up" ? "▲" : item.event.kind === "district" ? "◈" : item.event.kind === "main_quest" ? "★" : "✦"}</Text>
         </View>
         <Text style={styles.line}>{say(t, feedLine(item.event))}</Text>
       </View>

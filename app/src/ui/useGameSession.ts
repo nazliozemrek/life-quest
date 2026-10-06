@@ -9,7 +9,8 @@ import { CREATION_QUEST, startGame } from "../game/onboarding";
 import { applySetup, type Goal, type Place } from "../game/setup";
 import { SAVE_KEY, dayKey, restore, serialize } from "../game/persist";
 import { applyFixes, completeQuest, planWalk, spawnAt, type Session } from "../game/session";
-import { creationOps, goalsOp, nodeOp, profileOp, questOp } from "../net/outbox";
+import { creationOps, goalOp, goalsOp, nodeOp, profileOp, questOp } from "../net/outbox";
+import { finishGoal as finishMainQuest } from "../game/mainquest";
 import { unlockNode } from "../game/skilltree";
 import { useCloudSync } from "../net/useCloudSync";
 import { buzz } from "./haptics";
@@ -193,6 +194,15 @@ export function useGameSession() {
     cloud.enqueue(nodeOp(id));
   }, [commit, emit, cloud]);
 
+  /** Claim a main quest. Paid once; the goal moves to the finished list and frees its slot. */
+  const finishGoal = useCallback((id: string) => {
+    const r = finishMainQuest(latest.current, id, dayKey(new Date()));
+    if (!r.ok) return emit({ kind: "error", message: r.reason });
+    commit(r.session);
+    emit({ kind: "xp", xp: r.xp, title: r.goal.title, levelUp: r.levelUp });
+    cloud.enqueue(goalOp(r.goal, r.xp, r.split as Record<string, number>), goalsOp(r.session.player.profile?.goals ?? []));
+  }, [commit, emit, cloud]);
+
   const setTitle = useCallback((title: string | null) => {
     const s = latest.current;
     commit({ ...s, player: { ...s.player, title: title ?? undefined } });
@@ -205,5 +215,5 @@ export function useGameSession() {
     emit({ kind: "info", title: msg("account.restored", { name: restored.player.name }) });
   }, [commit, cloud, emit]);
 
-  return { session, loaded, event, mode, walkTo, complete, begin, finishSetup, unlock, setTitle, adoptRestored };
+  return { session, loaded, event, mode, walkTo, complete, begin, finishSetup, unlock, finishGoal, setTitle, adoptRestored };
 }

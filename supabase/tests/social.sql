@@ -121,6 +121,19 @@ begin
   assert refused = 5, 'burst limit: refused ' || refused;
 end $$;
 
+-- A finished main quest makes a card with its horizon and skill, never its title.
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000b1', true);
+insert into xp_ledger (idempotency_key, source, title, final_xp, skill_split, curve_version)
+values ('goal:year:g1', 'quest', 'Pay off my debt', 1200, '{"wealth": 1200}', 1),
+       ('goal:week:g2', 'quest', 'Call grandma', 150, '{"vitality": 30, "craft": 30, "wealth": 30, "charisma": 30, "mindset": 30}', 1),
+       ('quest:2026-10-06:q1', 'quest', 'Not a goal', 20, '{"craft": 20}', 1);
+do $$ begin
+  assert (select count(*) from activity_feed where kind = 'main_quest') = 2, 'two main quest cards';
+  assert (select event from activity_feed where dedupe = 'goal:year:g1') = '{"horizon": "year", "skill": "wealth"}', 'year card';
+  assert (select event->>'skill' from activity_feed where dedupe = 'goal:week:g2') is null, 'no single skill';
+  assert (select count(*) from activity_feed where event::text like '%debt%' or event::text like '%grandma%') = 0, 'goal title leaked';
+end $$;
+
 -- Signed out: nothing.
 reset role;
 set local role anon;

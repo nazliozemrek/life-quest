@@ -36,9 +36,14 @@ export function creationOps(c: Calibration, creationXp: number): SyncOp[] {
   ];
 }
 
-/** The player's whole goal list, replacing what the server has. */
+/** The player's active goals, replacing what the server has. Finished ones live on as ledger rows. */
 export function goalsOp(goals: Goal[]): SyncOp {
-  return { op: "goals", goals: goals.map(({ id, title, horizon, skill }) => ({ id, title, horizon, skill })) };
+  return { op: "goals", goals: goals.filter(g => !g.doneAt).map(({ id, title, horizon, skill }) => ({ id, title, horizon, skill })) };
+}
+
+/** A finished main quest. The key carries the horizon, so the server can make its feed card without the title. */
+export function goalOp(g: Goal, xp: number, split: Record<string, number>): SyncOp {
+  return { op: "xp", key: `goal:${g.horizon}:${g.id}`, source: "quest", title: g.title, xp, split, rested: 0, multipliers: {} };
 }
 
 /** A skill tree node the player bought. Idempotent: re-sending one is a no-op. */

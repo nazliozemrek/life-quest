@@ -26,7 +26,7 @@ export type FeedEvent =
   | { kind: "level_up"; level: number }
   | { kind: "skill_node"; nodeId: string }
   | { kind: "district"; pct: number }
-  | { kind: "main_quest"; skill: SkillCode; horizon: string }
+  | { kind: "main_quest"; skill: SkillCode | null; horizon: string }
   | { kind: "streak"; days: number };
 
 export interface FeedItem {
@@ -45,7 +45,7 @@ export interface FeedPage { scope: FeedScope; items: FeedItem[] }
 /** The server sends kind and event apart; joined here, dropping kinds this build doesn't know. */
 export function parseFeed(raw: unknown): FeedPage {
   const r = raw as { scope?: FeedScope; items?: (Omit<FeedItem, "event"> & { kind: string; event: object })[] } | null;
-  const known = new Set(["level_up", "skill_node", "district"]);
+  const known = new Set(["level_up", "skill_node", "district", "main_quest"]);
   return {
     scope: r?.scope ?? "private",
     items: (r?.items ?? []).filter(i => known.has(i.kind)).map(({ kind, event, ...rest }) => ({
@@ -135,7 +135,7 @@ export function feedLine(e: FeedEvent): Msg {
         : msg("social.ev.node", { node: ph(n?.name ?? e.nodeId) });
     }
     case "district": return e.pct >= 75 ? msg("social.ev.legend") : msg("social.ev.district", { pct: e.pct });
-    case "main_quest": return msg("social.ev.mainQuest", { skill: msg(`skill.${e.skill}`) });
+    case "main_quest": return e.skill ? msg("social.ev.mainQuest", { skill: msg(`skill.${e.skill}`) }) : msg("social.ev.mainQuestAny");
     case "streak": return msg("social.ev.streak", { n: e.days });
   }
 }
@@ -149,7 +149,7 @@ export function feedSkill(e: FeedEvent): SkillCode | null {
 
 /** Capstones and every tenth level get the gold border. */
 export const isBig = (e: FeedEvent) =>
-  (e.kind === "skill_node" && NODES.get(e.nodeId)?.branch === "capstone") || (e.kind === "level_up" && e.level % 10 === 0)
+  (e.kind === "main_quest" && e.horizon !== "week") || (e.kind === "skill_node" && NODES.get(e.nodeId)?.branch === "capstone") || (e.kind === "level_up" && e.level % 10 === 0)
   || (e.kind === "district" && e.pct >= 75);
 
 /** "2 h ago". Server times are rounded down to the hour, so anything under an hour is "this hour". */

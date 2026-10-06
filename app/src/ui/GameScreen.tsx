@@ -146,7 +146,7 @@ function World({ game }: { game: ReturnType<typeof useGameSession> }) {
       <Modal visible={sheet} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setSheet(false)}>
         <SafeAreaProvider>
           <Profile session={session} onClose={() => setSheet(false)} onUnlock={game.unlock} onTitle={game.setTitle}
-            onEditSetup={game.finishSetup} />
+            onEditSetup={game.finishSetup} onFinishGoal={game.finishGoal} />
           <Toast event={event} />
         </SafeAreaProvider>
       </Modal>

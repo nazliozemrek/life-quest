@@ -5,6 +5,7 @@
 //   * The two mornings after: skills going rusty. Only fires if the app isn't opened in between.
 import { plural, type T } from "../i18n";
 import type { Session } from "./session";
+import { activeGoals } from "./setup";
 
 export interface Reminder { id: string; at: Date; title: string; body: string }
 
@@ -30,7 +31,7 @@ export function planReminders(s: Session, now: Date, t: T): Reminder[] {
       body: d > 0 ? t("reminder.evening.streak", { d }) : t("reminder.evening.start"),
     });
   }
-  const goal = s.player.profile?.goals?.[0]?.title;
+  const goal = activeGoals(s.player.profile?.goals)[0]?.title;
   out.push({
     id: "lq-morning-1", at: at(now, 1, MORNING_HOUR), title: t("reminder.morning.title"),
     body: goal ? t("reminder.morning.goal", { goal }) : t("reminder.morning.body"),

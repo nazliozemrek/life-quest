@@ -1,7 +1,7 @@
 import { cellToLatLng } from "h3-js";
 import { useMemo, useState } from "react";
 import { Modal, StyleSheet, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import type { Quest } from "../../../src/quests/quest-generator";
 import { isPinnedPlace, hud as toHud, previewAward, questGate } from "../game/session";
 import { availableCount } from "../game/skilltree";
@@ -141,14 +141,20 @@ function World({ game }: { game: ReturnType<typeof useGameSession> }) {
 
       <Toast event={event} />
 
+      {/* A Modal is a separate native root on iOS: without its own provider the screens inside get zero insets and
+          their top bar (with the close button) slides under the status bar, where taps don't land. */}
       <Modal visible={sheet} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setSheet(false)}>
-        <Profile session={session} onClose={() => setSheet(false)} onUnlock={game.unlock} onTitle={game.setTitle}
-          onEditSetup={game.finishSetup} />
-        <Toast event={event} />
+        <SafeAreaProvider>
+          <Profile session={session} onClose={() => setSheet(false)} onUnlock={game.unlock} onTitle={game.setTitle}
+            onEditSetup={game.finishSetup} />
+          <Toast event={event} />
+        </SafeAreaProvider>
       </Modal>
 
       <Modal visible={social} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setSocial(false)}>
-        <AroundYou session={session} onClose={() => setSocial(false)} onSeen={badge.markSeen} />
+        <SafeAreaProvider>
+          <AroundYou session={session} onClose={() => setSocial(false)} onSeen={badge.markSeen} />
+        </SafeAreaProvider>
       </Modal>
     </View>
   );

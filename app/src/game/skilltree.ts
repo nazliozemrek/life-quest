@@ -188,3 +188,12 @@ export function titles(p: Player): string[] {
 export function availableCount(p: Player): number {
   return SKILLS.reduce((a, s) => a + TREES[s].filter(n => canUnlock(p, n.id).ok).length, 0);
 }
+
+/** Whether this tree has a node to buy now; if not but points are waiting, the skill level that opens the next one. */
+export function treeStatus(p: Player, skill: SkillCode): { canBuy: boolean; nextLevel: number | null } {
+  const owned = unlocked(p);
+  const canBuy = TREES[skill].some(n => canUnlock(p, n.id).ok);
+  const level = skillLevels.levelFor(p.skills[skill].xp);
+  const next = TREES[skill].filter(n => !owned.has(n.id) && n.requiredLevel > level).map(n => n.requiredLevel);
+  return { canBuy, nextLevel: next.length ? Math.min(...next) : null };
+}

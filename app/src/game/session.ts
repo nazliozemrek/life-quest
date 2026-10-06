@@ -60,6 +60,7 @@ export interface Session {
   explored: ReadonlySet<string>;     // res-10 fog cells, all time
   newCells: ReadonlySet<string>;     // revealed since the session started, for exploration quests
   position: Fix;
+  day?: string;                      // local day the quests belong to (persist.ts dayKey); set by restore
 }
 
 // ---------- XP ----------
@@ -73,7 +74,8 @@ function awardInput(s: Session, q: Quest): AwardInput {
   return {
     tier: q.tier,
     effort: q.effort,
-    skillWeights: Object.fromEntries(q.skill_weights.map(w => [w.skill, w.weight])),
+    // Summed per skill: a generated quest that names a skill twice must still add up to 1.
+    skillWeights: q.skill_weights.reduce<Partial<Record<SkillCode, number>>>((a, w) => ({ ...a, [w.skill]: (a[w.skill] ?? 0) + w.weight }), {}),
     difficulty: s.player.difficulty,
     verification: q.verification,
     streakDays: s.player.streakDays,
@@ -101,6 +103,10 @@ export function previewAward(s: Session, q: Quest): AwardResult {
   if (!extra) return r;
   return { ...r, totalXp: r.totalXp + extra, perSkill, multipliers: { ...r.multipliers, skillTree: 1 + extra / (r.totalXp || 1) } };
 }
+
+/** The streak as the player sees it: the days before today, plus today once a quest is done. The XP multiplier
+ *  still uses only the days before today, so finishing the first quest of the day doesn't change its own price. */
+export const shownStreak = (s: Session) => s.player.streakDays + (s.quests.some(e => e.status === "done") ? 1 : 0);
 
 const PINNED_NAMES: Record<string, string> = { home: "Home", work: "Work", gym: "Gym" };
 /** A home/work/gym the player pinned (setup.ts names them by kind), as opposed to a named map waypoint. */
@@ -262,7 +268,7 @@ export function hud(s: Session): Hud {
     need: p.need,
     pct: p.pct,
     restedPct: Math.min(1 - p.pct, s.player.rested / p.need),
-    streakDays: s.player.streakDays,
+    streakDays: shownStreak(s),
     streakMult: streakMult(s.player.streakDays),
     skills: SKILLS.map(code => {
       const st = s.player.skills[code];

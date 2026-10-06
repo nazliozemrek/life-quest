@@ -16,10 +16,10 @@ values (1, 'onboarding', 14, 'normal', 'normal', 'normal', '{long commute}', 1.0
 insert into xp_ledger (idempotency_key, source, final_xp, skill_split, curve_version)
 values ('backstory', 'backstory', 1760, '{"craft": 900, "wealth": 400, "charisma": 460}', 1);
 insert into xp_ledger (idempotency_key, source, title, final_xp, skill_split, curve_version)
-values ('quest:2026-10-05:q2', 'quest', 'Forge 25 Minutes of Deep Work', 70, '{"craft": 49, "mindset": 21}', 1)
+values ('quest:' || current_date || ':q2', 'quest', 'Forge 25 Minutes of Deep Work', 70, '{"craft": 49, "mindset": 21}', 1)
 on conflict (player_id, idempotency_key) do nothing;
 insert into xp_ledger (idempotency_key, source, title, final_xp, skill_split, curve_version)
-values ('quest:2026-10-05:q2', 'quest', 'Forge 25 Minutes of Deep Work', 70, '{"craft": 49, "mindset": 21}', 1)
+values ('quest:' || current_date || ':q2', 'quest', 'Forge 25 Minutes of Deep Work', 70, '{"craft": 49, "mindset": 21}', 1)
 on conflict (player_id, idempotency_key) do nothing;
 
 do $$ begin
@@ -94,7 +94,7 @@ do $$ begin
   delete from player_goals where id like '%';
   begin
     insert into xp_ledger (player_id, idempotency_key, source, final_xp, curve_version)
-    values ('00000000-0000-0000-0000-00000000000a', 'evil', 'quest', 10, 1);
+    values ('00000000-0000-0000-0000-00000000000a', 'quest:' || current_date || ':evil', 'quest', 10, 1);
     raise exception 'B wrote into A''s ledger';
   exception when insufficient_privilege then null; end;
 end $$;

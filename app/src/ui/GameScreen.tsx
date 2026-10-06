@@ -9,6 +9,7 @@ import { HudHeader } from "./HudHeader";
 import { Profile } from "./profile/Profile";
 import { Onboarding } from "./onboarding/Onboarding";
 import { SetupFlow } from "./onboarding/Setup";
+import { activeGoals } from "../game/setup";
 import { ACCOUNTS_ENABLED, RestoreFlow } from "./account/Account";
 import { fromCloud } from "../game/cloudsave";
 import { createSession } from "../game/mock-world";
@@ -48,7 +49,10 @@ export function GameScreen() {
         onRestore={ACCOUNTS_ENABLED ? () => setRestoring(true) : undefined} />
     );
   }
-  if (!profile.setupDone) return <SetupFlow explored={game.session.explored} position={game.session.position} onDone={game.finishSetup} />;
+  if (!profile.setupDone) {
+    return <SetupFlow explored={game.session.explored} position={game.session.position} onDone={game.finishSetup}
+      initialGoals={activeGoals(profile.goals)} />;
+  }
   return <World game={game} />;
 }
 

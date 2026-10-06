@@ -1,13 +1,14 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Location from "expo-location";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AppState } from "react-native";
 import type { Fix } from "../../../src/spatial/spatial-engine";
 import type { OnboardingAnswers } from "../../../src/onboarding/calibration";
 import { createSession } from "../game/mock-world";
 import { poolQuests } from "../game/context";
 import { CREATION_QUEST, startGame } from "../game/onboarding";
 import { applySetup, type Goal, type Place } from "../game/setup";
-import { SAVE_KEY, dayKey, restore, serialize } from "../game/persist";
+import { SAVE_KEY, dayKey, restore, rollover, serialize } from "../game/persist";
 import { applyFixes, completeQuest, planWalk, spawnAt, type Session } from "../game/session";
 import { creationOps, goalOp, goalsOp, nodeOp, profileOp, questOp } from "../net/outbox";
 import { finishGoal as finishMainQuest } from "../game/mainquest";
@@ -94,10 +95,25 @@ export function useGameSession() {
   useEffect(() => {
     if (!loaded) return;
     const t = setTimeout(() => {
-      AsyncStorage.setItem(SAVE_KEY, JSON.stringify(serialize(session, dayKey(new Date())))).catch(() => {});
+      AsyncStorage.setItem(SAVE_KEY, JSON.stringify(serialize(session, session.day ?? dayKey(new Date())))).catch(() => {});
     }, SAVE_DEBOUNCE_MS);
     return () => clearTimeout(t);
   }, [session, loaded]);
+
+  // Midnight while the app is open or in the background: new quests, and streak, rested and the daily caps turn
+  // over, just as they would on the next launch. Checked on the way back to the foreground and once a minute.
+  const turnDay = useCallback(() => {
+    const s = latest.current;
+    const next = rollover(s, dayKey(new Date()), createSession, poolQuests);
+    if (next !== s) commit(next);
+  }, [commit]);
+  useEffect(() => {
+    if (!loaded) return;
+    turnDay();
+    const sub = AppState.addEventListener("change", st => { if (st === "active") turnDay(); });
+    const t = setInterval(turnDay, 60_000);
+    return () => { sub.remove(); clearInterval(t); };
+  }, [loaded, turnDay]);
 
   // Real location: the first fix spawns the player, every later one goes through validation and fog reveal.
   // Starts after the restore so a spawn can't be overwritten by the saved position.
@@ -165,7 +181,7 @@ export function useGameSession() {
     commit(r.session);
     const quest = s.quests.find(e => e.quest.local_id === localId)!.quest;
     emit({ kind: "xp", xp: r.award.totalXp, title, rationale: quest.rationale, levelUp: r.levelUp?.to ?? null });
-    cloud.enqueue(questOp(dayKey(new Date()), localId, title, r.award));
+    cloud.enqueue(questOp(s.day ?? dayKey(new Date()), localId, title, r.award));
   }, [commit, emit, cloud]);
 
   /** Finish character creation: the new player replaces the seed one, and the tutorial quest pays out. */

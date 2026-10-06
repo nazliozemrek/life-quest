@@ -41,7 +41,14 @@ export function serialize(s: Session, day: string): SavedGame {
 function isSavedGame(x: unknown): x is SavedGame {
   const g = x as SavedGame;
   return !!g && g.v === VERSION && typeof g.day === "string" && !!g.player && Array.isArray(g.quests)
-    && Array.isArray(g.explored) && Array.isArray(g.newCells) && !!g.position;
+    && Array.isArray(g.explored) && Array.isArray(g.newCells) && !!g.position
+    && !!g.player.skills && SKILLS.every(c => typeof g.player.skills[c as SkillCode]?.xp === "number");
+}
+
+/** Whole XP only. Builds before the rested fix could save fractions (70.7 XP), which the server refuses. */
+function wholeXp(p: Player): Player {
+  if (Number.isInteger(p.totalXp) && Number.isInteger(p.rested)) return p;
+  return { ...p, totalXp: Math.floor(p.totalXp), rested: Math.floor(p.rested) };
 }
 
 /**
@@ -53,6 +60,24 @@ export function restore(
   raw: string | null, today: string, fresh: () => Session,
   newDayQuests: (s: Session, day: string) => QuestEntry[] = () => fresh().quests,
 ): Session {
+  try {
+    return { ...restoreSaved(raw, today, fresh, newDayQuests), day: today };
+  } catch {
+    return { ...fresh(), day: today };    // a save this build can't read starts fresh rather than a blank screen
+  }
+}
+
+/** The app stayed open past midnight: roll the running session over exactly as a restore the next morning would. */
+export function rollover(
+  s: Session, today: string, fresh: () => Session, newDayQuests: (s: Session, day: string) => QuestEntry[],
+): Session {
+  if (!s.day || s.day >= today) return s;
+  return restore(JSON.stringify(serialize(s, s.day)), today, fresh, newDayQuests);
+}
+
+function restoreSaved(
+  raw: string | null, today: string, fresh: () => Session, newDayQuests: (s: Session, day: string) => QuestEntry[],
+): Session {
   const base = fresh();
   let saved: unknown;
   try { saved = raw ? JSON.parse(raw) : null; } catch { saved = null; }
@@ -61,9 +86,9 @@ export function restore(
   const gap = daysBetween(saved.day, today);
   // Goals from before goals had a start day count from this save's day.
   const prof = saved.player.profile;
-  const player = prof?.goals?.some(g => !g.createdAt)
+  const player = wholeXp(prof?.goals?.some(g => !g.createdAt)
     ? { ...saved.player, profile: { ...prof, goals: prof.goals.map(g => ({ ...g, createdAt: g.createdAt ?? saved.day })) } }
-    : saved.player;
+    : saved.player);
   const kept: Session = {
     ...base,
     player,

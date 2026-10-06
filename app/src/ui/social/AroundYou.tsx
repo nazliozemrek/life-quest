@@ -3,7 +3,7 @@
 import * as Haptics from "expo-haptics";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  AccessibilityInfo, ActivityIndicator, Animated, Easing, FlatList, Pressable, RefreshControl, ScrollView, StyleSheet,
+  AccessibilityInfo, ActivityIndicator, Alert, Animated, Easing, FlatList, Pressable, RefreshControl, ScrollView, StyleSheet,
   Text, TextInput, View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -14,7 +14,10 @@ import {
   type Avatar, type FeedItem, type FeedScope, type GiveResult,
 } from "../../game/social";
 import { say, type Msg } from "../../i18n";
-import { fetchFeed, giveRespect, myProfile, saveProfile, saveRegion, type MyProfile } from "../../net/social";
+import {
+  blockAuthor, blockedCount, fetchFeed, giveRespect, myProfile, reportItem, saveProfile, saveRegion, unblockAll,
+  type MyProfile, type ReportReason,
+} from "../../net/social";
 import { Button, useKeyboardInset } from "../onboarding/parts";
 import { useT } from "../settings";
 import { color, skillColor } from "../theme";
@@ -171,6 +174,8 @@ function OptIn({ session, current, editing, onSaved, onCancel }: {
       </View>
       <Text style={styles.note}>{t("social.showModeNote")}</Text>
 
+      {editing && <Blocked />}
+
       {error && <Text style={styles.error}>{say(t, error)}</Text>}
       <Button label={t(editing ? "social.save" : "social.goPublic")} disabled={busy || (!!problem && username.length >= 3)}
         onPress={() => save(true)} />
@@ -179,6 +184,25 @@ function OptIn({ session, current, editing, onSaved, onCancel }: {
         <Pressable onPress={onCancel} accessibilityRole="button"><Text style={styles.link}>{t("common.cancel")}</Text></Pressable>
       )}
     </ScrollView>
+  );
+}
+
+/** How many players I've blocked, and the way back. Shown only when there's something to undo. */
+function Blocked() {
+  const t = useT();
+  const [n, setN] = useState(0);
+  const [done, setDone] = useState(false);
+  useEffect(() => { blockedCount().then(setN); }, []);
+  if (done) return <Text style={styles.note}>{t("social.unblocked")}</Text>;
+  if (!n) return null;
+  return (
+    <View style={styles.nameRow}>
+      <Text style={[styles.note, { flex: 1 }]}>{t("social.blocked", { n })}</Text>
+      <Pressable style={styles.smallBtn} accessibilityRole="button"
+        onPress={async () => { if (await unblockAll()) { setN(0); setDone(true); } }}>
+        <Text style={styles.smallBtnText}>{t("social.unblockAll")}</Text>
+      </Pressable>
+    </View>
   );
 }
 
@@ -257,6 +281,23 @@ function Feed({ onSeen }: { onSeen?(topId: string | null): void }) {
     return r;
   }, []);
 
+  /** Report or block from a card's menu. The cards go at once; the server keeps them gone on every refresh. */
+  const openMenu = useCallback((item: FeedItem) => {
+    const name = item.author.username;
+    const act = async (run: () => Promise<boolean>, wholePlayer: boolean) => {
+      if (!(await run())) return setNotice({ key: "social.report.failed" });
+      setItems(old => old.filter(o => (wholePlayer ? o.author.username !== name || o.mine : o.id !== item.id)));
+      setNotice({ key: wholePlayer ? "social.report.done" : "social.report.doneCard" });
+    };
+    const report = (reason: ReportReason) => act(() => reportItem(item.id, reason), reason !== "cheating");
+    Alert.alert(t("social.report.title", { name }), t("social.report.body"), [
+      { text: t("social.report.name"), onPress: () => report("name") },
+      { text: t("social.report.cheating"), onPress: () => report("cheating") },
+      { text: t("social.report.block", { name }), style: "destructive", onPress: () => act(() => blockAuthor(item.id), true) },
+      { text: t("social.report.cancel"), style: "cancel" },
+    ]);
+  }, [t]);
+
   if (state === "loading") return <ActivityIndicator color={color.xp} style={{ marginTop: 48 }} />;
   if (state === "error") return <Empty text={t("social.offline")} action={t("social.retry")} onPress={reload} />;
 
@@ -273,7 +314,7 @@ function Feed({ onSeen }: { onSeen?(topId: string | null): void }) {
       <FlatList
         data={items}
         keyExtractor={i => i.id}
-        renderItem={({ item }) => <FeedCard item={item} onGive={give} />}
+        renderItem={({ item }) => <FeedCard item={item} onGive={give} onMore={openMenu} />}
         contentContainerStyle={styles.list}
         ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={pull} tintColor={color.xp} />}
@@ -290,7 +331,7 @@ function Feed({ onSeen }: { onSeen?(topId: string | null): void }) {
   );
 }
 
-function FeedCard({ item, onGive }: { item: FeedItem; onGive(id: string): Promise<GiveResult> }) {
+function FeedCard({ item, onGive, onMore }: { item: FeedItem; onGive(id: string): Promise<GiveResult>; onMore(item: FeedItem): void }) {
   const t = useT();
   const a = item.author;
   const skill = feedSkill(item.event);
@@ -314,6 +355,12 @@ function FeedCard({ item, onGive }: { item: FeedItem; onGive(id: string): Promis
             {a.mode && <ModeBadge mode={a.mode} />}
           </View>
         </View>
+        {!item.mine && (
+          <Pressable onPress={() => onMore(item)} hitSlop={12} accessibilityRole="button"
+            accessibilityLabel={t("social.more", { name: a.username })}>
+            <Text style={styles.more}>⋯</Text>
+          </Pressable>
+        )}
       </View>
       <View style={styles.milestone}>
         <View style={[styles.icon, { backgroundColor: `${tint}2E` }]}>
@@ -464,6 +511,7 @@ function Pill({ label, on, onPress }: { label: string; on: boolean; onPress(): v
 }
 
 const styles = StyleSheet.create({
+  more: { color: color.textDim, fontSize: 22, lineHeight: 22, paddingHorizontal: 4 },
   screen: { flex: 1, backgroundColor: color.bg },
   topBar: { height: 44, paddingHorizontal: 20, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   topActions: { flexDirection: "row", alignItems: "center", gap: 18 },

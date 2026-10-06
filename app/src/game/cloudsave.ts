@@ -9,7 +9,8 @@ export function cloudSave(s: Session, day: string): SavedGame {
   return {
     v: 1, day, quests: s.quests, explored: [], newCells: [],
     position: { lat: 0, lng: 0, t: 0, accuracyM: 999 },
-    player: p.profile ? { ...p, profile: { ...p.profile, answers: SKIPPED } } : p,
+    // Places stay on the phone, so a restored character is asked for them again (its goals carry over).
+    player: p.profile ? { ...p, profile: { ...p.profile, answers: SKIPPED, setupDone: false } } : p,
   };
 }
 
@@ -19,5 +20,8 @@ export function fromCloud(
   newDayQuests: (s: Session, day: string) => QuestEntry[],
 ): Session {
   const base = fresh();
-  return restore(JSON.stringify({ ...save, explored: cells, newCells: [], position: base.position }), today, fresh, newDayQuests);
+  // Saves uploaded before setupDone was cleared on upload still say true; places never come back from the cloud.
+  const p = save.player;
+  const player = p.profile ? { ...p, profile: { ...p.profile, setupDone: false } } : p;
+  return restore(JSON.stringify({ ...save, player, explored: cells, newCells: [], position: base.position }), today, fresh, newDayQuests);
 }

@@ -5,12 +5,12 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { CLASSES } from "../../../../src/onboarding/calibration";
 import { playerLevels, skillLevels, type SkillCode } from "../../../../src/xp/xp-engine";
-import { SKILLS, type Player, type Session } from "../../game/session";
+import { SKILLS, shownStreak, type Player, type Session } from "../../game/session";
 import { activeGoals, type Goal, type Place, type PlaceKind } from "../../game/setup";
 import { MAIN_QUEST_XP, finishBlocker } from "../../game/mainquest";
 import { dayKey } from "../../game/persist";
 import {
-  NODES, TREES, canUnlock, nodeState, points, titles, xpBonus, type SkillNode,
+  NODES, TREES, canUnlock, nodeState, points, titles, treeStatus, xpBonus, type SkillNode,
 } from "../../game/skilltree";
 import { SetupFlow } from "../onboarding/Setup";
 import { ACCOUNTS_ENABLED, BackupBox } from "../account/Account";
@@ -74,7 +74,7 @@ export function Profile({ session, onClose, onUnlock, onTitle, onEditSetup, onFi
             <Text style={styles.name} numberOfLines={1}>{p.name}</Text>
             <Text style={styles.sub}>{[p.title && t.p(p.title), cls].filter(Boolean).join(" · ")}</Text>
             <Text style={styles.stats}>
-              {t("profile.stats", { xp: p.totalXp.toLocaleString(t.lang), streak: t("hud.streak", { n: p.streakDays }), mode: t(`mode.${p.difficulty}`) })}
+              {t("profile.stats", { xp: p.totalXp.toLocaleString(t.lang), streak: t("hud.streak", { n: shownStreak(session) }), mode: t(`mode.${p.difficulty}`) })}
             </Text>
           </View>
         </View>
@@ -111,7 +111,7 @@ export function Profile({ session, onClose, onUnlock, onTitle, onEditSetup, onFi
         <Section title={t("profile.trees")}>
           <View style={styles.tabs}>
             {SKILLS.map(s => {
-              const free = points(p, s).free;
+              const free = treeStatus(p, s).canBuy ? points(p, s).free : 0;
               return (
                 <Pressable key={s} onPress={() => { setTab(s); setPicked(null); }}
                   style={[styles.tab, tab === s && { borderColor: skillColor[s], backgroundColor: `${skillColor[s]}1F` }]}
@@ -155,6 +155,7 @@ function Tree({ player, skill, picked, onPick }: { player: Player; skill: SkillC
   const t = useT();
   const nodes = TREES[skill];
   const pts = points(player, skill);
+  const status = treeStatus(player, skill);
   const bonus = Math.round((xpBonus(player)[skill] ?? 0) * 100);
   const root = nodes[0];
   const cap = nodes[nodes.length - 1];
@@ -163,7 +164,9 @@ function Tree({ player, skill, picked, onPick }: { player: Player; skill: SkillC
     <View style={styles.tree}>
       <Text style={styles.treeHead}>
         <Text style={[styles.treeName, { color: tint }]}>{t(`skill.${skill}`)}</Text>
-        {"  " + t(pts.free === 1 ? "profile.pointsOne" : "profile.points", { n: pts.free, bonus })}
+        {"  " + (pts.free > 0 && !status.canBuy && status.nextLevel
+          ? t(pts.free === 1 ? "profile.pointsSavedOne" : "profile.pointsSaved", { n: pts.free, level: status.nextLevel, bonus })
+          : t(pts.free === 1 ? "profile.pointsOne" : "profile.points", { n: pts.free, bonus }))}
       </Text>
       <Node node={root} player={player} picked={picked} onPick={onPick} wide />
       <View style={styles.columns}>

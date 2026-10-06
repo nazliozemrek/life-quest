@@ -63,6 +63,15 @@ export interface Db {
 const CELL_CHUNK = 500;
 
 /**
+ * Errors no retry can fix: bad data (Postgres class 22), a value a check refuses (23514), a missing required value
+ * (23502). Anything else, including a missing player row (23503) or a dropped connection, is retried later.
+ */
+export function isPermanent(error: unknown): boolean {
+  const code = (error as { code?: unknown } | null)?.code;
+  return typeof code === "string" && (code.startsWith("22") || code === "23514" || code === "23502");
+}
+
+/**
  * Send queued ops in order, then any explored cells the server hasn't seen. Stops at the first failure and
  * returns what's left, so order is kept (the player row must exist before ledger rows reference it).
  */
@@ -76,9 +85,12 @@ export async function flush(
     const { error } = o.op === "profile" ? await sendProfile(db, o) : o.op === "goals" ? await sendGoals(db, o.goals)
       : o.op === "node" ? await db.from("player_skill_nodes").upsert({ node_id: o.id }, { onConflict: "player_id,node_id", ignoreDuplicates: true })
       : await db.from("xp_ledger").upsert({
-      idempotency_key: o.key, source: o.source, title: o.title, final_xp: o.xp, skill_split: o.split,
-      rested_consumed: o.rested, multipliers: o.multipliers, curve_version: CURVE_VERSION,
+      // Whole numbers: older builds could queue rested XP with decimals, which an int column refuses forever.
+      idempotency_key: o.key, source: o.source, title: o.title, final_xp: Math.floor(o.xp),
+      skill_split: Object.fromEntries(Object.entries(o.split).map(([k, v]) => [k, Math.floor(v)])),
+      rested_consumed: Math.floor(o.rested), multipliers: o.multipliers, curve_version: CURVE_VERSION,
     }, { onConflict: "player_id,idempotency_key", ignoreDuplicates: true });
+    if (error && isPermanent(error)) continue;     // a row the server will never take: skip it, don't block the rest
     if (error) return { remaining: ops.slice(i), synced: done };
   }
   // Cells only once the player row exists, i.e. nothing is stuck in the queue.

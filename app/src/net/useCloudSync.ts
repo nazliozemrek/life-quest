@@ -60,7 +60,7 @@ export function useCloudSync(
   const uploadSave = async () => {
     const st = state.current;
     if (!supabase || !st) return;
-    const body = cloudSave(latest.current, dayKey(new Date()));
+    const body = cloudSave(latest.current, latest.current.day ?? dayKey(new Date()));
     const json = JSON.stringify(body);
     const hash = `${json.length}:${hashString(json)}`;
     if (st.savedHash === hash) return;
@@ -80,8 +80,9 @@ export function useCloudSync(
    *  nothing has been completed yet, so quest ids never change under a finished quest. */
   const fetchQuests = async () => {
     const today = dayKey(new Date());
-    if (!supabase || fetchedDay.current === today) return;
     const s = latest.current;
+    // Past midnight but not rolled over yet: the new day's set is asked for after the rollover.
+    if (!supabase || fetchedDay.current === today || (s.day && s.day !== today)) return;
     const { data, error } = await supabase.functions.invoke("daily-quests", {
       body: {
         day: today,
@@ -99,9 +100,13 @@ export function useCloudSync(
     onNewQuests?.();
   };
 
+  // Ops and a creation mark that arrive before the queue has loaded from storage wait here instead of being lost.
+  const early = useRef<{ ops: SyncOp[]; created: boolean }>({ ops: [], created: false });
+
   const enqueue = useCallback((...ops: (SyncOp | null)[]) => {
-    if (!state.current) return;
-    state.current = { ...state.current, ops: [...state.current.ops, ...ops.filter((o): o is SyncOp => !!o)] };
+    const add = ops.filter((o): o is SyncOp => !!o);
+    if (!state.current) { early.current.ops.push(...add); return; }
+    state.current = { ...state.current, ops: [...state.current.ops, ...add] };
     save();
   }, []);
 
@@ -114,7 +119,11 @@ export function useCloudSync(
       if (cancelled) return;
       let st: SyncState = { ops: [], synced: [], bootstrapped: false };
       try { if (raw) st = { ...st, ...JSON.parse(raw) }; } catch { /* corrupt: start over, writes are idempotent */ }
-      state.current = st;
+      const waiting = early.current;
+      early.current = { ops: [], created: false };
+      state.current = { ...st, ops: [...st.ops, ...waiting.ops], bootstrapped: st.bootstrapped || waiting.created };
+      st = state.current;
+      if (waiting.ops.length || waiting.created) save();
       const p = latest.current.player;
       if (!st.bootstrapped && p.profile) {
         state.current = { ...st, bootstrapped: true };
@@ -139,6 +148,7 @@ export function useCloudSync(
   /** Mark the queue as covering this character from creation on, so bootstrap never double-queues it. */
   const markCreated = useCallback(() => {
     if (state.current) state.current = { ...state.current, bootstrapped: true };
+    else early.current.created = true;
   }, []);
 
   /** After a restore: the server already has everything, including these fog cells. */

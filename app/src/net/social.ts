@@ -33,6 +33,7 @@ const REASONS: Record<string, Msg> = {
   is_handle: msg("social.err.isHandle"),
   taken: msg("social.err.taken"),
   no_player: msg("social.err.noPlayer"),
+  avatar: msg("social.err.avatar"),
 };
 
 export async function saveProfile(p: Omit<MyProfile, "region" | "regionAt">): Promise<{ ok: true } | { ok: false; error: Msg }> {
@@ -75,4 +76,32 @@ export async function fetchInbox(after: number): Promise<Inbox | null> {
   if (error || !data) return null;
   const r = data as Inbox;
   return { lastId: Number(r.lastId), count: Number(r.count), restedXp: Number(r.restedXp) };
+}
+
+export type ReportReason = "name" | "avatar" | "cheating" | "other";
+
+/** Report a card. Hides it for me; any reason but cheating also blocks its author. */
+export async function reportItem(itemId: string, reason: ReportReason): Promise<boolean> {
+  if (!supabase) return false;
+  const { data, error } = await supabase.rpc("report_item", { p_item: Number(itemId), p_reason: reason });
+  return !error && (data as { ok: boolean }).ok;
+}
+
+/** Hide everything from this card's author, both ways. They aren't told. */
+export async function blockAuthor(itemId: string): Promise<boolean> {
+  if (!supabase) return false;
+  const { data, error } = await supabase.rpc("block_author", { p_item: Number(itemId) });
+  return !error && (data as { ok: boolean }).ok;
+}
+
+export async function blockedCount(): Promise<number> {
+  if (!supabase) return 0;
+  const { data, error } = await supabase.rpc("blocked_count");
+  return error ? 0 : Number(data);
+}
+
+export async function unblockAll(): Promise<boolean> {
+  if (!supabase) return false;
+  const { error } = await supabase.rpc("unblock_all");
+  return !error;
 }
